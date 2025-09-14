@@ -153,7 +153,7 @@ LaunchedEffect(projectId) {
             } else {
                 TaskTimeline(
                     tasks = uiState.tasks,
-                    project = uiState.currentProject,
+//                    project = uiState.currentProject,
                     onAssigneeClick = { userId ->
                         profileViewModel.viewUserProfile(userId)
                     },
@@ -282,16 +282,12 @@ private fun AssigneesRow(
 @Composable
 private fun TaskTimeline(
     tasks: List<TaskResponse>,
-    project: ProjectResponse?,
+//    project: ProjectResponse?,
     onAssigneeClick: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val sortedTasks = remember(tasks) {
         tasks.sortedByDescending { it.createdAt }
-    }
-
-    val creator = remember(project) {
-        project?.assignees?.find { it.userId == project.createdBy }
     }
 
     LazyColumn(
@@ -305,9 +301,7 @@ private fun TaskTimeline(
             val isLastInGroup = index == sortedTasks.lastIndex || date != LocalDate.parse(sortedTasks[index + 1].createdAt.take(10))
             val previousStatus = if (index > 0) TaskStatus.valueOf(sortedTasks[index - 1].status) else null
 
-            val taskCreator = remember(project, task) {
-                project?.assignees?.find { it.userId == task.createdBy }
-            }
+
 
             Column {
                 if (isFirstInGroup) {
@@ -329,7 +323,6 @@ private fun TaskTimeline(
                     Spacer(modifier = Modifier.width(8.dp))
                     TimelineTaskCard(
                         task = task,
-                        creator= taskCreator,
                         onAssigneeClick = onAssigneeClick
                     )
                 }
@@ -402,7 +395,6 @@ fun TimelineGutter(
 @Composable
 private fun TimelineTaskCard(
     task: TaskResponse,
-    creator: ProjectAssigneeResponse?,
     onAssigneeClick: (Long) -> Unit
 
 ) {
@@ -453,27 +445,37 @@ private fun TimelineTaskCard(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom) {
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     CountIndicator(icon = Icons.AutoMirrored.Filled.ArrowBack, count = task.messageCount)
                     CountIndicator(icon = Icons.Filled.Check, count = task.attachmentCount)
                 }
-                Spacer(modifier = Modifier.weight(1f))
-                AssigneeAvatar(
-                    assignee = task.assignee,
-                    size = 32.dp,
-                    onClick = { onAssigneeClick(task.assignee.userId) }
-                )
 
-                if (creator != null) {
+                Column(horizontalAlignment = Alignment.End) {
+                    AssigneeAvatar(
+                        assignee = task.assignee,
+                        size = 32.dp,
+                        onClick = { onAssigneeClick(task.assignee.userId) }
+                    )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Created By ${creator.name}",
+                        text = "By ${task.creator.name}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.Gray
                     )
-                }
 
+                }
             }
         }
     }

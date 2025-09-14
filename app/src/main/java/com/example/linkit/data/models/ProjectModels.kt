@@ -75,6 +75,7 @@ data class TaskResponse(
     val description: String?,
     val projectId: Long,
     val assignee: ProjectAssigneeResponse,
+    val creator: ProjectAssigneeResponse,
     val startDate: String,
     val endDate: String,
     val status: String,
