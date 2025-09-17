@@ -69,7 +69,6 @@ fun TaskScreen(
     val showBottomSheet = remember { derivedStateOf { viewedProfileState.profile != null } }
 
 
-
     if (showBottomSheet.value) {
         ModalBottomSheet(
             onDismissRequest = { profileViewModel.closeUserProfileSheet() },
@@ -101,6 +100,7 @@ LaunchedEffect(projectId) {
         }
     }
 
+
     if (uiState.showDeleteProjectDialog) {
         DeleteProjectConfirmationDialog(
             projectName = uiState.currentProject?.name ?: "this project",
@@ -131,6 +131,8 @@ LaunchedEffect(projectId) {
             ProjectHeader(
                 project = uiState.currentProject,
                 taskCount = uiState.tasks.size,
+
+                loggedInUserId = uiState.loggedInUserId,
                 onNavigateBack = {
                     viewModel.goBackToProjects()
                     onNavigateBack()
@@ -182,6 +184,7 @@ LaunchedEffect(projectId) {
 private fun ProjectHeader(
     project: ProjectResponse?,
     taskCount: Int,
+    loggedInUserId: Long?,
     onNavigateBack: () -> Unit,
     onDeleteProject: () -> Unit,
     onAddAssignees: () -> Unit
@@ -206,13 +209,27 @@ private fun ProjectHeader(
                 IconButton(onClick = onNavigateBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
-                Text("OMP Dashboard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                IconButton(onClick = onDeleteProject) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Project",
-                        tint = MaterialTheme.colorScheme.error
-                    )
+
+                Text(
+                    "Dashboard",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f)
+                )
+
+                LaunchedEffect(project, loggedInUserId) {
+                    println("DEBUG: loggedInUserId = $loggedInUserId")
+                    println("DEBUG: project?.createdBy = ${project?.createdBy}")
+                    println("DEBUG: project = $project")
+                }
+
+                if (loggedInUserId != null && loggedInUserId == project?.createdBy) {
+                    IconButton(onClick = onDeleteProject) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Project",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))

@@ -134,7 +134,6 @@ data class NotificationRequest(
     val platform: String
 )
 
-
 enum class ProjectPriority(val displayName: String, val colorName: String) {
     LOW("Low", "Green"),
     MEDIUM("Medium", "Orange"),

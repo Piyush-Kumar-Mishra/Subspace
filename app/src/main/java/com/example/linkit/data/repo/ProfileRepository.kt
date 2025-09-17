@@ -450,7 +450,12 @@ class ProfileRepository @Inject constructor(
     private suspend fun cacheUserProfile(profileResponse: ProfileResponse, token: String?) {
         try {
             val userId = profileResponse.userId
-            // Get email from token only if the token is not null (for the logged-in user)
+
+            if (token != null) {
+                tokenStore.saveUserId(userId)
+            }
+
+
             val email = if (token != null) JwtUtils.getEmailFromToken(token) ?: "" else ""
 
             var localImagePath: String? = null

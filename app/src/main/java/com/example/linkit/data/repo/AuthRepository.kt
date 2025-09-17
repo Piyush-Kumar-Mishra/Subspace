@@ -18,6 +18,8 @@ class AuthRepository @Inject constructor(
 
     fun getToken(): Flow<String?> = tokenStore.token
 
+    fun getUserId(): Flow<Long?> = tokenStore.userId
+
     fun register(email: String, username: String, password: String): Flow<NetworkResult<RegisterResponse>> = flow {
 
         emit(NetworkResult.Loading())

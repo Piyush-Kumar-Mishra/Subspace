@@ -1,10 +1,14 @@
+
 package com.example.linkit.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.linkit.data.TokenStore
 import com.example.linkit.data.models.*
+import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.data.repo.ProfileRepository
+import com.example.linkit.util.JwtUtils
 import com.example.linkit.util.NetworkResult
 import com.example.linkit.util.UiEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -12,6 +16,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -24,7 +29,8 @@ data class ProjectUiState(
     val currentProject: ProjectResponse? = null,
     val tasks: List<TaskResponse> = emptyList(),
     val selectedTab: Int = 0,
-    val showDeleteProjectDialog: Boolean = false
+    val showDeleteProjectDialog: Boolean = false,
+    val loggedInUserId: Long? = null
 )
 
 data class CreateProjectUiState(
@@ -60,7 +66,8 @@ data class TaskUiState(
 @HiltViewModel
 class ProjectViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
-    private val profileRepository: ProfileRepository
+    private val profileRepository: ProfileRepository,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProjectUiState())
@@ -79,6 +86,18 @@ class ProjectViewModel @Inject constructor(
 
     init {
         loadProjects()
+        loadLoggedInUserId()
+    }
+
+    private fun loadLoggedInUserId() {
+        viewModelScope.launch {
+            // Get the user ID directly from the TokenStore via the repository.
+            authRepository.getUserId().collect { userId ->
+                if (userId != null) {
+                    _uiState.value = _uiState.value.copy(loggedInUserId = userId)
+                }
+            }
+        }
     }
 
     fun loadProjects() {
@@ -371,7 +390,7 @@ class ProjectViewModel @Inject constructor(
         _createTaskState.value = state.copy(isLoading = true)
         viewModelScope.launch {
             projectRepository.createTask(request).collect { result ->
-                _createTaskState.value = state.copy(isLoading = false)
+                _createTaskState.value = _createTaskState.value.copy(isLoading = false)
                 when (result) {
                     is NetworkResult.Success -> {
                         _uiEvent.emit(UiEvent.ShowToast("Task created successfully"))

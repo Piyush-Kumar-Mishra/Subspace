@@ -112,7 +112,7 @@ fun GetStartedScreen(onGetStarted: () -> Unit) {
                 .size(380.dp)
                 .align(Alignment.Center)
                 .rotate(60f)
-                .offset(x = (-80).dp)
+                .offset(x = (-90).dp)
         )
 
     }
