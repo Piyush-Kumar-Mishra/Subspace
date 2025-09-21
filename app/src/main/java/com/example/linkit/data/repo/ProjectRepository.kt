@@ -161,6 +161,9 @@ class ProjectRepository @Inject constructor(
         }
     }
 
+
+
+
     fun createTask(request: CreateTaskRequest): Flow<NetworkResult<TaskResponse>> = flow {
         emit(NetworkResult.Loading())
         try {
@@ -316,6 +319,30 @@ class ProjectRepository @Inject constructor(
             else -> errorBody ?: "Request failed with code: $code"
         }
     }
+
+
+    fun updateTask(taskId: Long, request: UpdateTaskRequest): Flow<NetworkResult<TaskResponse>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && networkUtils.isInternetAvailable()) {
+                val response = api.updateTask(taskId, request)
+                if (response.isSuccessful) {
+                    response.body()?.let {
+                        emit(NetworkResult.Success(it))
+                    } ?: emit(NetworkResult.Error("Empty response"))
+                } else {
+                    emit(NetworkResult.Error(getErrorMessage(response.code(), response.errorBody()?.string())))
+                }
+            } else {
+                emit(NetworkResult.Error("No internet connection or invalid token"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Network error: ${e.message}"))
+        }
+    }
+
+
 }
 
 

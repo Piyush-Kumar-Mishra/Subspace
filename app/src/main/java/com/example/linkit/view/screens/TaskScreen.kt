@@ -1,8 +1,12 @@
 package com.example.linkit.view.screens
 
+import android.R.attr.color
+import android.R.color
+import android.util.Log
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -89,7 +93,10 @@ fun TaskScreen(
     }
 
 LaunchedEffect(projectId) {
-        viewModel.loadProjectById(projectId)
+
+    Log.d("SCREEN_LOAD_CHECK", "TaskScreen is loading for projectId: $projectId")
+
+    viewModel.loadProjectById(projectId)
         viewModel.loadProjectTasks(projectId)
         viewModel.uiEvent.collectLatest { event ->
             when (event) {
@@ -155,10 +162,12 @@ LaunchedEffect(projectId) {
             } else {
                 TaskTimeline(
                     tasks = uiState.tasks,
-//                    project = uiState.currentProject,
+
+                    loggedInUserId = uiState.loggedInUserId,
                     onAssigneeClick = { userId ->
                         profileViewModel.viewUserProfile(userId)
                     },
+                    viewModel = viewModel,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
@@ -299,9 +308,10 @@ private fun AssigneesRow(
 @Composable
 private fun TaskTimeline(
     tasks: List<TaskResponse>,
-//    project: ProjectResponse?,
+    loggedInUserId: Long?,
     onAssigneeClick: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ProjectViewModel
 ) {
     val sortedTasks = remember(tasks) {
         tasks.sortedByDescending { it.createdAt }
@@ -340,7 +350,11 @@ private fun TaskTimeline(
                     Spacer(modifier = Modifier.width(8.dp))
                     TimelineTaskCard(
                         task = task,
-                        onAssigneeClick = onAssigneeClick
+                        loggedInUserId = loggedInUserId,
+                        onAssigneeClick = onAssigneeClick,
+                        onStatusChange = { newStatus ->
+                            viewModel.updateTaskStatus(task.id, newStatus)
+                        }
                     )
                 }
             }
@@ -412,14 +426,29 @@ fun TimelineGutter(
 @Composable
 private fun TimelineTaskCard(
     task: TaskResponse,
-    onAssigneeClick: (Long) -> Unit
-
+    loggedInUserId: Long?,
+    onAssigneeClick: (Long) -> Unit,
+    onStatusChange: (TaskStatus) -> Unit
 ) {
     val status = TaskStatus.valueOf(task.status)
     val statusColor = when (status) {
         TaskStatus.TODO -> Color.Gray
         TaskStatus.IN_PROGRESS -> Color(0xFFFFA000)
         TaskStatus.COMPLETED -> Color(0xFF673AB7)
+    }
+
+
+    val canChangeStatus = loggedInUserId == task.assignee.userId
+
+    var showStatusMenu by remember { mutableStateOf(false) }
+
+
+    LaunchedEffect(task, loggedInUserId) {
+        Log.d("TASK_CARD_DEBUG", "Task: ${task.name} (ID: ${task.id})")
+        Log.d("TASK_CARD_DEBUG", "Current Status: ${task.status}")
+        Log.d("TASK_CARD_DEBUG", "Logged In User: $loggedInUserId")
+        Log.d("TASK_CARD_DEBUG", "Task Assignee: ${task.assignee.userId}")
+        Log.d("TASK_CARD_DEBUG", "Can Change Status: $canChangeStatus")
     }
 
     Card(
@@ -430,12 +459,58 @@ private fun TimelineTaskCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = status.displayName,
-                    color = statusColor,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
+
+                Box {
+                    val statusModifier = if (canChangeStatus) {
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showStatusMenu = true }
+                            .padding(4.dp)
+                    } else {
+                        Modifier.padding(4.dp)
+                    }
+
+                    Row(
+                        modifier = statusModifier,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = status.displayName,
+                            color = statusColor,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (canChangeStatus) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Change Status",
+                                tint = statusColor
+                            )
+                        }
+                    }
+
+                    if (canChangeStatus) {
+                        DropdownMenu(
+                            expanded = showStatusMenu,
+                            onDismissRequest = { showStatusMenu = false }
+                        ) {
+                            TaskStatus.values().forEach { statusOption ->
+                                DropdownMenuItem(
+                                    text = { Text(statusOption.displayName) },
+                                    onClick = {
+
+                                        Log.d("TASK_CARD_DEBUG", "Status clicked: ${statusOption.name}")
+                                        Log.d("TASK_CARD_DEBUG", "Calling onStatusChange for task ${task.id}")
+
+                                        onStatusChange(statusOption)
+                                        showStatusMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = "Nº ${task.id}",
@@ -443,13 +518,13 @@ private fun TimelineTaskCard(
                     color = Color.Gray
                 )
             }
+
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = task.name,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
-
             if (!task.description.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -460,12 +535,7 @@ private fun TimelineTaskCard(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom) {
-            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom
@@ -491,7 +561,6 @@ private fun TimelineTaskCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.Gray
                     )
-
                 }
             }
         }
@@ -505,13 +574,23 @@ private fun CountIndicator(icon: androidx.compose.ui.graphics.vector.ImageVector
         Text(text = count.toString(), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
     }
 }
-
 @Composable
-private fun AssigneeAvatar(assignee: ProjectAssigneeResponse, size: androidx.compose.ui.unit.Dp, onClick: (() -> Unit)? = null) {
+private fun AssigneeAvatar(
+    assignee: ProjectAssigneeResponse,
+    size: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
     val clickableModifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
+            .border(
+                width = 2.dp,
+                color = MaterialTheme.colorScheme.secondary,
+                shape = CircleShape
+            )
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(clickableModifier)
@@ -535,8 +614,6 @@ private fun AssigneeAvatar(assignee: ProjectAssigneeResponse, size: androidx.com
         }
     }
 }
-
-
 @Composable
 private fun EmptyTasksView(modifier: Modifier = Modifier, onCreateTask: () -> Unit) {
     Column(

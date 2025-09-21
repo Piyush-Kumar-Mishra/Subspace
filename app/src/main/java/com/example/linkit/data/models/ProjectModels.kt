@@ -62,6 +62,7 @@ data class CreateTaskRequest(
 @Serializable
 data class UpdateTaskRequest(
     val name: String,
+    val description: String?,
     val assigneeId: Long,
     val startDate: String,
     val endDate: String,

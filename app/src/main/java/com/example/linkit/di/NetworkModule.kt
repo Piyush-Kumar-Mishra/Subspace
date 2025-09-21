@@ -33,7 +33,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-
     private val Context.dataStore by preferencesDataStore("auth_prefs")
 
     @Provides

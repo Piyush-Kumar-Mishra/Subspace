@@ -1,6 +1,7 @@
 
 package com.example.linkit.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.linkit.data.TokenStore
@@ -10,13 +11,16 @@ import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.data.repo.ProfileRepository
 import com.example.linkit.util.JwtUtils
 import com.example.linkit.util.NetworkResult
+import com.example.linkit.util.NetworkUtils
 import com.example.linkit.util.UiEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -91,7 +95,7 @@ class ProjectViewModel @Inject constructor(
 
     private fun loadLoggedInUserId() {
         viewModelScope.launch {
-            // Get the user ID directly from the TokenStore via the repository.
+
             authRepository.getUserId().collect { userId ->
                 if (userId != null) {
                     _uiState.value = _uiState.value.copy(loggedInUserId = userId)
@@ -525,4 +529,55 @@ class ProjectViewModel @Inject constructor(
             onDismissDeleteProjectDialog()
         }
     }
+
+
+    fun updateTaskStatus(taskId: Long, newStatus: TaskStatus) {
+        viewModelScope.launch {
+
+            val currentTask = _uiState.value.tasks.find { it.id == taskId }
+            val projectId = _uiState.value.currentProject?.id
+
+
+            if (currentTask == null) {
+                Log.e("TASK_UPDATE_DEBUG", "ERROR: Task not found in state")
+                _uiEvent.emit(UiEvent.ShowToast("Error: Task not found. Please refresh."))
+                return@launch
+            }
+
+            if (projectId == null) {
+                Log.e("TASK_UPDATE_DEBUG", "ERROR: Project not found in state")
+                _uiEvent.emit(UiEvent.ShowToast("Error: Project not found. Please refresh."))
+                return@launch
+            }
+
+            val request = UpdateTaskRequest(
+                name = currentTask.name,
+                description = currentTask.description,
+                assigneeId = currentTask.assignee.userId,
+                startDate = currentTask.startDate,
+                endDate = currentTask.endDate,
+                status = newStatus.name
+            )
+
+
+            projectRepository.updateTask(taskId, request).collect { result ->
+                Log.d("TASK_UPDATE_DEBUG", "Repository Result: $result")
+                when (result) {
+                    is NetworkResult.Success -> {
+                        Log.d("TASK_UPDATE_DEBUG", "SUCCESS: Task updated successfully")
+                        _uiEvent.emit(UiEvent.ShowToast("Task status updated to ${newStatus.displayName}!"))
+                        loadProjectTasks(projectId)
+                    }
+                    is NetworkResult.Error -> {
+                        Log.e("TASK_UPDATE_DEBUG", "ERROR: ${result.message}")
+                        _uiEvent.emit(UiEvent.ShowToast("Failed to update task: ${result.message}"))
+                    }
+                    is NetworkResult.Loading -> {
+                        Log.d("TASK_UPDATE_DEBUG", "Loading...")
+                    }
+                }
+            }
+        }
+    }
+
 }

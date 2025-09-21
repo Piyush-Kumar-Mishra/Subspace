@@ -339,5 +339,4 @@ class ProfileViewModel @Inject constructor(
         _viewedProfileState.value = ViewedProfileState()
     }
 
-
 }
