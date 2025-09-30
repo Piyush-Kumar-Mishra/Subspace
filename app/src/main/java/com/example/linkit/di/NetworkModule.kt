@@ -165,9 +165,10 @@ object NetworkModule {
     fun provideProjectRepository(
         projectApiService: ProjectApiService,
         tokenStore: TokenStore,
-        networkUtils: NetworkUtils
+        networkUtils: NetworkUtils,
+        @ApplicationContext context: Context
     ): ProjectRepository {
-        return ProjectRepository(projectApiService, tokenStore, networkUtils)
+        return ProjectRepository(projectApiService, tokenStore, networkUtils,context)
     }
 }
 

@@ -118,6 +118,7 @@ data class TaskAttachmentResponse(
     val taskId: Long,
     val fileName: String,
     val filePath: String,
+    val downloadUrl: String,
     val fileSize: Long,
     val mimeType: String,
     val uploadedBy: ProjectAssigneeResponse,

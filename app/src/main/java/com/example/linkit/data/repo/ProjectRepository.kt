@@ -1,5 +1,7 @@
 package com.example.linkit.data.repo
 
+import android.content.Context
+import android.net.Uri
 import com.example.linkit.data.TokenStore
 import com.example.linkit.data.api.ProjectApiService
 import com.example.linkit.data.models.*
@@ -11,13 +13,15 @@ import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import javax.inject.Inject
 
 class ProjectRepository @Inject constructor(
     private val api: ProjectApiService,
     private val tokenStore: TokenStore,
-    private val networkUtils: NetworkUtils
+    private val networkUtils: NetworkUtils,
+    private val context: Context
 ) {
 
     fun getProjects(): Flow<NetworkResult<List<ProjectResponse>>> = flow {
@@ -162,8 +166,6 @@ class ProjectRepository @Inject constructor(
     }
 
 
-
-
     fun createTask(request: CreateTaskRequest): Flow<NetworkResult<TaskResponse>> = flow {
         emit(NetworkResult.Loading())
         try {
@@ -260,32 +262,43 @@ class ProjectRepository @Inject constructor(
         }
     }
 
-    fun uploadTaskAttachment(taskId: Long, file: File): Flow<NetworkResult<TaskAttachmentResponse>> = flow {
+    fun uploadTaskAttachment(taskId: Long, fileUri: Uri, fileName: String): Flow<NetworkResult<TaskAttachmentResponse>> = flow {
         emit(NetworkResult.Loading())
         try {
             val token = tokenStore.token.first()
             if (token != null && networkUtils.isInternetAvailable()) {
-                val requestFile = file.asRequestBody("application/octet-stream".toMediaTypeOrNull())
-                val multipartBody = MultipartBody.Part.createFormData("file", file.name, requestFile)
 
-                val response = api.uploadTaskAttachment(taskId, multipartBody)
-                if (response.isSuccessful) {
-                    response.body()?.let {
-                        emit(NetworkResult.Success(it))
-                    } ?: emit(NetworkResult.Error("Empty response"))
+                val inputStream = context.contentResolver.openInputStream(fileUri)
+                if (inputStream == null) {
+                    emit(NetworkResult.Error("Failed to open file stream from Uri."))
+                    return@flow
                 }
-                else {
+                val requestBody = inputStream.readBytes().toRequestBody(
+                    context.contentResolver.getType(fileUri)?.toMediaTypeOrNull()
+                )
+                inputStream.close() // close the stream
+
+                val multipartBody = MultipartBody.Part.createFormData(
+                    "file",
+                    fileName,
+                    requestBody
+                )
+                val response = api.uploadTaskAttachment(taskId, multipartBody)
+
+                if (response.isSuccessful && response.body() != null) {
+                    emit(NetworkResult.Success(response.body()!!))
+                } else {
                     emit(NetworkResult.Error(getErrorMessage(response.code(), response.errorBody()?.string())))
                 }
-            }
-            else {
+            } else {
                 emit(NetworkResult.Error("No internet connection or invalid token"))
             }
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
             emit(NetworkResult.Error("Network error: ${e.message}"))
         }
     }
+
+
 
     fun registerDeviceToken(token: String, platform: String): Flow<NetworkResult<Unit>> = flow {
         emit(NetworkResult.Loading())

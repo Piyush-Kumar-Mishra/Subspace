@@ -5,7 +5,6 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -14,9 +13,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -24,6 +26,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -55,9 +59,8 @@ fun ProfileScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val bottomSheetState = rememberModalBottomSheetState()
     val coroutineScope = rememberCoroutineScope()
-    var showBottomSheet by remember { mutableStateOf(false) }
-    val uiState by viewModel.uiState.collectAsState()
-
+    var showAddConnectionSheet by remember { mutableStateOf(false) }
+    var showUpdateProfileDialog by remember { mutableStateOf(false) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -75,9 +78,6 @@ fun ProfileScreen(
 
     LaunchedEffect(Unit) {
         viewModel.refreshAllData()
-    }
-
-    LaunchedEffect(Unit) {
         viewModel.uiEvent.collectLatest { event ->
             when (event) {
                 is UiEvent.ShowToast -> snackbarHostState.showSnackbar(event.msg)
@@ -87,28 +87,8 @@ fun ProfileScreen(
         }
     }
 
-// Listen to offline/online state changes
-    LaunchedEffect(uiState.isOffline) {
-        if (uiState.isOffline) {
-            Toast.makeText(
-                context,
-                uiState.offlineMessage.ifBlank { "You are offline" },
-                Toast.LENGTH_SHORT
-            ).show()
-        } else {
-            Toast.makeText(
-                context,
-                "Back online",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-
     Scaffold(
-
         snackbarHost = { SnackbarHost(snackbarHostState) },
-
         topBar = {
             TopAppBar(
                 title = { Text("Profile") },
@@ -128,10 +108,7 @@ fun ProfileScreen(
         val currentProfileState = profileState
         when (currentProfileState) {
             is NetworkResult.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
@@ -146,13 +123,8 @@ fun ProfileScreen(
                             profile = currentProfileState.data,
                             profileImageBitmap = state.profileImageBitmap,
                             onImageClick = { imagePickerLauncher.launch("image/*") },
-                            onAddConnectionClick = { showBottomSheet = true }
-                        )
-                    }
-                    item {
-                        EditableProfileFields(
-                            state = state,
-                            viewModel = viewModel
+                            onAddConnectionClick = { showAddConnectionSheet = true },
+                            onUpdateProfileClick = { showUpdateProfileDialog = true }
                         )
                     }
                     item {
@@ -173,10 +145,7 @@ fun ProfileScreen(
                         }
                         1 -> { // About
                             item {
-                                AboutSection(
-                                    aboutText = state.aboutMe,
-                                    onAboutChanged = viewModel::onAboutMeChanged
-                                )
+                                AboutSectionDisplay(aboutText = state.aboutMe)
                             }
                         }
                     }
@@ -190,11 +159,8 @@ fun ProfileScreen(
             }
         }
 
-        if (showBottomSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showBottomSheet = false },
-                sheetState = bottomSheetState
-            ) {
+        if (showAddConnectionSheet) {
+            ModalBottomSheet(onDismissRequest = { showAddConnectionSheet = false }, sheetState = bottomSheetState) {
                 AddConnectionBottomSheet(
                     searchQuery = state.searchQuery,
                     searchResults = state.searchResults,
@@ -203,12 +169,22 @@ fun ProfileScreen(
                         viewModel.addConnection(email)
                         coroutineScope.launch { bottomSheetState.hide() }.invokeOnCompletion {
                             if (!bottomSheetState.isVisible) {
-                                showBottomSheet = false
+                                showAddConnectionSheet = false
                             }
                         }
                     }
                 )
             }
+        }
+
+        if (showUpdateProfileDialog) {
+            UpdateProfileDialog(
+                state = state,
+                viewModel = viewModel,
+                onDismiss = { showUpdateProfileDialog = false },
+                onImageClick = { imagePickerLauncher.launch("image/*") },
+                existingImageUrl = (profileState as? NetworkResult.Success)?.data?.profileImageUrl
+            )
         }
     }
 }
@@ -218,88 +194,121 @@ private fun ProfileHeader(
     profile: com.example.linkit.data.models.ProfileResponse,
     profileImageBitmap: Bitmap?,
     onImageClick: () -> Unit,
-    onAddConnectionClick: () -> Unit
+    onAddConnectionClick: () -> Unit,
+    onUpdateProfileClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
-        Text(
-            text = "Welcome, ${profile.name}",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         Box(
-            modifier = Modifier
-                .size(120.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable { onImageClick() }
+            modifier = Modifier.size(120.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onImageClick() }
         ) {
             when {
-                // Show selected bitmap first (when updating)
-                profileImageBitmap != null -> {
-                    Image(
-                        bitmap = profileImageBitmap.asImageBitmap(),
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                // Show existing profile image from server
-                !profile.profileImageUrl.isNullOrBlank() -> {
-                    AuthorizedAsyncImage(
-                        imageUrl = profile.profileImageUrl,
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                // Show placeholder
-                else -> {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Add Profile Image",
-                        modifier = Modifier.fillMaxSize(),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                profileImageBitmap != null -> Image(bitmap = profileImageBitmap.asImageBitmap(), contentDescription = "Profile Image", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                !profile.profileImageUrl.isNullOrBlank() -> AuthorizedAsyncImage(imageUrl = profile.profileImageUrl, contentDescription = "Profile Image", modifier = Modifier.fillMaxSize())
+                else -> Icon(Icons.Default.Person, contentDescription = "Add Profile Image", modifier = Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = profile.name,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
-        )
+        Text(text = profile.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         if (!profile.jobTitle.isNullOrBlank()) {
-            Text(
-                text = profile.jobTitle,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(text = profile.jobTitle, style = MaterialTheme.typography.bodyLarge)
         }
         if (!profile.company.isNullOrBlank()) {
-            Text(
-                text = profile.company,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text(text = profile.company, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = onAddConnectionClick,
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Add Connection")
+            Button(onClick = onAddConnectionClick, modifier = Modifier.weight(1f)) {
+                Text("Add Connection")
+            }
+            OutlinedButton(onClick = onUpdateProfileClick, modifier = Modifier.weight(1f)) {
+                Text("Update Profile")
+            }
         }
     }
 }
+
+
+@Composable
+private fun UpdateProfileDialog(
+    state: ProfileUiState,
+    viewModel: ProfileViewModel,
+    onDismiss: () -> Unit,
+    onImageClick: () -> Unit,
+    existingImageUrl: String?
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Update Profile") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier.size(90.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onImageClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        state.profileImageBitmap != null -> Image(bitmap = state.profileImageBitmap.asImageBitmap(), contentDescription = "Profile Image", modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                        !existingImageUrl.isNullOrBlank() -> AuthorizedAsyncImage(imageUrl = existingImageUrl, contentDescription = "Profile Image", modifier = Modifier.fillMaxSize())
+                        else -> Icon(Icons.Default.Person, contentDescription = "Add Profile Image", modifier = Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Box(modifier = Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent)))) {
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Change photo", tint = Color.White, modifier = Modifier.align(Alignment.Center))
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(value = state.name, onValueChange = viewModel::onNameChanged, label = { Text("Full Name") }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = state.jobTitle, onValueChange = viewModel::onJobTitleChanged, label = { Text("Job Title") }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = state.company, onValueChange = viewModel::onCompanyChanged, label = { Text("Company") }, modifier = Modifier.fillMaxWidth())
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = state.aboutMe, onValueChange = viewModel::onAboutMeChanged, label = { Text("About Me") }, modifier = Modifier.fillMaxWidth().height(120.dp), maxLines = 5)
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    viewModel.updateProfile()
+                    onDismiss()
+                },
+                enabled = !state.isLoading
+            ) {
+                if (state.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary)
+                } else {
+                    Text("Save")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+private fun AboutSectionDisplay(aboutText: String) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Text(text = "About", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = aboutText.ifBlank { "No 'About Me' information provided. You can add it by tapping 'Update Profile'." },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 private fun AuthorizedAsyncImage(
     imageUrl: String,
@@ -321,74 +330,18 @@ private fun AuthorizedAsyncImage(
     )
 }
 
-
-@Composable
-private fun EditableProfileFields(state: ProfileUiState, viewModel: ProfileViewModel) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(all = 16.dp)
-    ) {
-        OutlinedTextField(
-            value = state.name,
-            onValueChange = viewModel::onNameChanged,
-            label = { Text("Full Name") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = state.jobTitle,
-            onValueChange = viewModel::onJobTitleChanged,
-            label = { Text("Job Title") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(
-            value = state.company,
-            onValueChange = viewModel::onCompanyChanged,
-            label = { Text("Company") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = viewModel::updateProfile,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !state.isLoading
-        ) {
-            if (state.isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
-            } else {
-                Text("Update Profile")
-            }
-        }
-    }
-}
-
 @Composable
 private fun ProfileTabs(selectedTabIndex: Int, onTabSelected: (Int) -> Unit) {
     TabRow(selectedTabIndex = selectedTabIndex) {
-        Tab(
-            selected = selectedTabIndex == 0,
-            onClick = { onTabSelected(0) },
-            text = { Text("Connections") }
-        )
-        Tab(
-            selected = selectedTabIndex == 1,
-            onClick = { onTabSelected(1) },
-            text = { Text("About") }
-        )
+        Tab(selected = selectedTabIndex == 0, onClick = { onTabSelected(0) }, text = { Text("Connections") })
+        Tab(selected = selectedTabIndex == 1, onClick = { onTabSelected(1) }, text = { Text("About") })
     }
 }
 
 @Composable
 private fun ConnectionItem(connection: ConnectionResponse) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
@@ -396,58 +349,25 @@ private fun ConnectionItem(connection: ConnectionResponse) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                modifier = Modifier.size(50.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (!connection.profileImageUrl.isNullOrBlank()) {
-                    AuthorizedAsyncImage(
-                        imageUrl = connection.profileImageUrl,
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    AuthorizedAsyncImage(imageUrl = connection.profileImageUrl, contentDescription = "Profile Image", modifier = Modifier.fillMaxSize())
                 } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize(),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Icon(Icons.Default.Person, contentDescription = "Profile Image", modifier = Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-
             Spacer(modifier = Modifier.width(16.dp))
             Column {
-                Text(
-                    text = connection.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text(text = connection.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (!connection.company.isNullOrBlank()) {
-                    Text(
-                        text = connection.company,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Text(text = connection.company, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
     }
 }
 
-@Composable
-private fun AboutSection(aboutText: String, onAboutChanged: (String) -> Unit) {
-    OutlinedTextField(
-        value = aboutText,
-        onValueChange = onAboutChanged,
-        label = { Text("About Me") },
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(150.dp)
-            .padding(16.dp),
-        maxLines = 6
-    )
-}
 
 @Composable
 private fun AddConnectionBottomSheet(
@@ -457,18 +377,8 @@ private fun AddConnectionBottomSheet(
     onAddConnection: (String) -> Unit
 ) {
     Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = "Add Connection",
-            style = MaterialTheme.typography.headlineSmall,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchQueryChanged,
-            label = { Text("Search by email") },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
+        Text(text = "Add Connection", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(bottom = 16.dp))
+        OutlinedTextField(value = searchQuery, onValueChange = onSearchQueryChanged, label = { Text("Search by email") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(modifier = Modifier.height(16.dp))
         if (searchResults.isEmpty() && searchQuery.isNotBlank()) {
             Text(text = "No users found", modifier = Modifier.padding(16.dp))
@@ -493,34 +403,17 @@ private fun SearchUserItem(user: UserSearchResult, onAddClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                modifier = Modifier.size(50.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (!user.profileImageUrl.isNullOrBlank()) {
-                    AuthorizedAsyncImage(
-                        imageUrl = user.profileImageUrl,
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    AuthorizedAsyncImage(imageUrl = user.profileImageUrl, contentDescription = "Profile Image", modifier = Modifier.fillMaxSize())
                 } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = "Profile Image",
-                        modifier = Modifier.fillMaxSize(),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Icon(Icons.Default.Person, contentDescription = "Profile Image", modifier = Modifier.fillMaxSize(), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = user.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Text(text = user.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(text = user.email, style = MaterialTheme.typography.bodyMedium)
                 if (!user.company.isNullOrBlank()) {
                     Text(
@@ -563,5 +456,3 @@ private fun ErrorView(message: String, onRetry: () -> Unit) {
         }
     }
 }
-
-

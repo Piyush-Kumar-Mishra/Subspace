@@ -1,37 +1,33 @@
-
 package com.example.linkit.viewmodel
 
-import android.util.Log
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.linkit.data.TokenStore
 import com.example.linkit.data.models.*
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.data.repo.ProfileRepository
-import com.example.linkit.util.JwtUtils
 import com.example.linkit.util.NetworkResult
-import com.example.linkit.util.NetworkUtils
 import com.example.linkit.util.UiEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import java.io.File
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
+
 
 data class ProjectUiState(
     val projects: List<ProjectResponse> = emptyList(),
     val isLoading: Boolean = false,
     val currentProject: ProjectResponse? = null,
     val tasks: List<TaskResponse> = emptyList(),
+    val attachmentsByTask: Map<Long, List<TaskAttachmentResponse>> = emptyMap(),
     val selectedTab: Int = 0,
     val showDeleteProjectDialog: Boolean = false,
     val loggedInUserId: Long? = null
@@ -95,7 +91,6 @@ class ProjectViewModel @Inject constructor(
 
     private fun loadLoggedInUserId() {
         viewModelScope.launch {
-
             authRepository.getUserId().collect { userId ->
                 if (userId != null) {
                     _uiState.value = _uiState.value.copy(loggedInUserId = userId)
@@ -140,11 +135,84 @@ class ProjectViewModel @Inject constructor(
             projectRepository.getProjectTasks(projectId).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> _uiState.value = _uiState.value.copy(isLoading = true)
-                    is NetworkResult.Success -> _uiState.value = _uiState.value.copy(tasks = result.data, isLoading = false)
+                    is NetworkResult.Success -> {
+                        _uiState.value = _uiState.value.copy(tasks = result.data, isLoading = false)
+                        result.data.forEach { task ->
+                            loadTaskAttachments(task.id)
+                        }
+                    }
                     is NetworkResult.Error -> {
                         _uiState.value = _uiState.value.copy(isLoading = false)
                         _uiEvent.emit(UiEvent.ShowToast(result.message))
                     }
+                }
+            }
+        }
+    }
+
+    fun loadTaskAttachments(taskId: Long) {
+        viewModelScope.launch {
+            projectRepository.getTaskAttachments(taskId).collect { result ->
+                if (result is NetworkResult.Success) {
+                    val currentAttachments = _uiState.value.attachmentsByTask.toMutableMap()
+                    currentAttachments[taskId] = result.data
+                    _uiState.value = _uiState.value.copy(attachmentsByTask = currentAttachments)
+                }
+            }
+        }
+    }
+
+    fun uploadAttachment(taskId: Long, fileUri: Uri, fileName: String) {
+        viewModelScope.launch {
+
+            projectRepository.uploadTaskAttachment(taskId, fileUri, fileName).collect { result ->
+                when (result) {
+                    is NetworkResult.Loading -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Uploading file..."))
+                    }
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("File uploaded successfully!"))
+                        uiState.value.currentProject?.id?.let { projectId ->
+                            loadProjectTasks(projectId)
+                        }
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Upload failed: ${result.message}"))
+                    }
+                }
+            }
+        }
+    }
+
+    fun updateTaskStatus(taskId: Long, newStatus: TaskStatus) {
+        viewModelScope.launch {
+            val currentTask = _uiState.value.tasks.find { it.id == taskId }
+            val projectId = _uiState.value.currentProject?.id
+
+            if (currentTask == null || projectId == null) {
+                _uiEvent.emit(UiEvent.ShowToast("Error: Task or project not found."))
+                return@launch
+            }
+
+            val request = UpdateTaskRequest(
+                name = currentTask.name,
+                description = currentTask.description,
+                assigneeId = currentTask.assignee.userId,
+                startDate = currentTask.startDate,
+                endDate = currentTask.endDate,
+                status = newStatus.name
+            )
+
+            projectRepository.updateTask(taskId, request).collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Task status updated!"))
+                        loadProjectTasks(projectId)
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Failed to update task: ${result.message}"))
+                    }
+                    else -> Unit
                 }
             }
         }
@@ -529,55 +597,4 @@ class ProjectViewModel @Inject constructor(
             onDismissDeleteProjectDialog()
         }
     }
-
-
-    fun updateTaskStatus(taskId: Long, newStatus: TaskStatus) {
-        viewModelScope.launch {
-
-            val currentTask = _uiState.value.tasks.find { it.id == taskId }
-            val projectId = _uiState.value.currentProject?.id
-
-
-            if (currentTask == null) {
-                Log.e("TASK_UPDATE_DEBUG", "ERROR: Task not found in state")
-                _uiEvent.emit(UiEvent.ShowToast("Error: Task not found. Please refresh."))
-                return@launch
-            }
-
-            if (projectId == null) {
-                Log.e("TASK_UPDATE_DEBUG", "ERROR: Project not found in state")
-                _uiEvent.emit(UiEvent.ShowToast("Error: Project not found. Please refresh."))
-                return@launch
-            }
-
-            val request = UpdateTaskRequest(
-                name = currentTask.name,
-                description = currentTask.description,
-                assigneeId = currentTask.assignee.userId,
-                startDate = currentTask.startDate,
-                endDate = currentTask.endDate,
-                status = newStatus.name
-            )
-
-
-            projectRepository.updateTask(taskId, request).collect { result ->
-                Log.d("TASK_UPDATE_DEBUG", "Repository Result: $result")
-                when (result) {
-                    is NetworkResult.Success -> {
-                        Log.d("TASK_UPDATE_DEBUG", "SUCCESS: Task updated successfully")
-                        _uiEvent.emit(UiEvent.ShowToast("Task status updated to ${newStatus.displayName}!"))
-                        loadProjectTasks(projectId)
-                    }
-                    is NetworkResult.Error -> {
-                        Log.e("TASK_UPDATE_DEBUG", "ERROR: ${result.message}")
-                        _uiEvent.emit(UiEvent.ShowToast("Failed to update task: ${result.message}"))
-                    }
-                    is NetworkResult.Loading -> {
-                        Log.d("TASK_UPDATE_DEBUG", "Loading...")
-                    }
-                }
-            }
-        }
-    }
-
 }
