@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.linkit.data.models.*
 import com.example.linkit.data.repo.AuthRepository
+import com.example.linkit.data.repo.PollRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.data.repo.ProfileRepository
 import com.example.linkit.util.NetworkResult
@@ -14,9 +15,11 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -30,8 +33,17 @@ data class ProjectUiState(
     val attachmentsByTask: Map<Long, List<TaskAttachmentResponse>> = emptyMap(),
     val selectedTab: Int = 0,
     val showDeleteProjectDialog: Boolean = false,
-    val loggedInUserId: Long? = null
+    val loggedInUserId: Long? = null,
+    val projectHasPoll: Boolean = false,
+    val selectedDate: LocalDate? = null,
+    val selectedFilter: ProjectFilter = ProjectFilter.ALL,
+    val daysWithProjectsInMonth: Set<Int> = emptySet(),
+    val currentMonth: YearMonth = YearMonth.now()
 )
+
+enum class ProjectFilter {
+    ALL, TODAY, HIGH, MEDIUM, LOW
+}
 
 data class CreateProjectUiState(
     val name: String = "",
@@ -67,6 +79,7 @@ data class TaskUiState(
 class ProjectViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val profileRepository: ProfileRepository,
+    private val pollRepository: PollRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
@@ -85,28 +98,47 @@ class ProjectViewModel @Inject constructor(
     private val _editingProjectId = MutableStateFlow<Long?>(null)
 
     init {
+        loadLoggedInUser()
         loadProjects()
-        loadLoggedInUserId()
+        loadProjectsForMonth(uiState.value.currentMonth)
     }
 
-    private fun loadLoggedInUserId() {
+    private fun loadLoggedInUser() {
         viewModelScope.launch {
-            authRepository.getUserId().collect { userId ->
-                if (userId != null) {
-                    _uiState.value = _uiState.value.copy(loggedInUserId = userId)
-                }
+            authRepository.getUserId().collect { id ->
+                _uiState.update { it.copy(loggedInUserId = id) }
             }
         }
     }
 
     fun loadProjects() {
+        val state = uiState.value
+
+        val priorityParam = when (state.selectedFilter) {
+            ProjectFilter.HIGH -> "HIGH"
+            ProjectFilter.MEDIUM -> "MEDIUM"
+            ProjectFilter.LOW -> "LOW"
+            else -> null
+        }
+
+        val dateParam = state.selectedDate?.format(DateTimeFormatter.ISO_DATE)
+
         viewModelScope.launch {
-            projectRepository.getProjects().collect { result ->
+            projectRepository.getProjectsFiltered(
+                priority = priorityParam,
+                date = dateParam,
+                startDateFrom = null,
+                startDateTo = null
+            ).collect { result ->
                 when (result) {
-                    is NetworkResult.Loading -> _uiState.value = _uiState.value.copy(isLoading = true)
-                    is NetworkResult.Success -> _uiState.value = _uiState.value.copy(projects = result.data, isLoading = false)
+                    is NetworkResult.Loading ->
+                        _uiState.update { it.copy(isLoading = true) }
+
+                    is NetworkResult.Success ->
+                        _uiState.update { it.copy(isLoading = false, projects = result.data) }
+
                     is NetworkResult.Error -> {
-                        _uiState.value = _uiState.value.copy(isLoading = false)
+                        _uiState.update { it.copy(isLoading = false) }
                         _uiEvent.emit(UiEvent.ShowToast(result.message))
                     }
                 }
@@ -114,11 +146,81 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    fun loadProjectsForMonth(month: YearMonth) {
+        val from = month.atDay(1).format(DateTimeFormatter.ISO_DATE)
+        val to = month.atEndOfMonth().format(DateTimeFormatter.ISO_DATE)
+
+        viewModelScope.launch {
+            projectRepository.getProjectsFiltered(startDateFrom = from, startDateTo = to)
+                .collect { result ->
+                    if (result is NetworkResult.Success) {
+                        val days = result.data.mapNotNull { proj ->
+                            runCatching {
+                                LocalDate.parse(proj.startDate.substring(0, 10)).dayOfMonth
+                            }.getOrNull()
+                        }.toSet()
+
+                        _uiState.update {
+                            it.copy(
+                                daysWithProjectsInMonth = days,
+                                currentMonth = month
+                            )
+                        }
+                    }
+                }
+        }
+    }
+    fun clearSelectedDate() {
+        _uiState.update { it.copy(selectedDate = null) }
+    }
+
+    fun applyFilter(filter: ProjectFilter) {
+        _uiState.update { it.copy(selectedFilter = filter) }
+
+        when (filter) {
+            ProjectFilter.ALL -> _uiState.update { it.copy(selectedDate = null) }
+
+            ProjectFilter.TODAY -> _uiState.update {
+                it.copy(selectedDate = LocalDate.now())
+            }
+
+            ProjectFilter.HIGH, ProjectFilter.MEDIUM, ProjectFilter.LOW -> {
+                // Priority filters MUST reset date
+                _uiState.update { it.copy(selectedDate = null) }
+            }
+        }
+
+        loadProjects()
+    }
+
+    fun onDateSelected(date: LocalDate?) {
+        _uiState.update {
+            it.copy(
+                selectedDate = date,
+                // When selecting a date, override filter
+                selectedFilter = if (date != null) ProjectFilter.ALL else it.selectedFilter
+            )
+        }
+
+        loadProjects()
+    }
+
+
+    fun goToPreviousMonth() {
+        val newMonth = uiState.value.currentMonth.minusMonths(1)
+        loadProjectsForMonth(newMonth)
+    }
+
+    fun goToNextMonth() {
+        val newMonth = uiState.value.currentMonth.plusMonths(1)
+        loadProjectsForMonth(newMonth)
+    }
     fun selectProject(project: ProjectResponse) {
         _uiState.value = _uiState.value.copy(currentProject = project)
     }
 
     fun loadProjectById(projectId: Long) {
+        checkProjectPollStatus(projectId)
         viewModelScope.launch {
             projectRepository.getProject(projectId).collect { result ->
                 when (result) {
@@ -597,4 +699,16 @@ class ProjectViewModel @Inject constructor(
             onDismissDeleteProjectDialog()
         }
     }
+
+
+    private fun checkProjectPollStatus(projectId: Long) {
+        viewModelScope.launch {
+            pollRepository.getProjectPoll(projectId).collect { result ->
+                _uiState.value = _uiState.value.copy(projectHasPoll = result is NetworkResult.Success)
+            }
+        }
+    }
+
+
+
 }

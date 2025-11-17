@@ -9,6 +9,8 @@ import android.os.Environment
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -34,6 +36,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -47,10 +50,12 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import com.example.linkit.R
 import com.example.linkit.data.models.*
 import com.example.linkit.util.Constants
 import com.example.linkit.util.UiEvent
+import com.example.linkit.viewmodel.PollViewModel
 import com.example.linkit.viewmodel.ProfileViewModel
 import com.example.linkit.viewmodel.ProjectViewModel
 import com.example.linkit.viewmodel.ViewedProfileState
@@ -62,24 +67,37 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskScreen(
     projectId: Long,
-    viewModel: ProjectViewModel = hiltViewModel(),
+    viewModel: ProjectViewModel,
     profileViewModel: ProfileViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToCreateTask: (Long) -> Unit
+    onNavigateToCreateTask: (Long) -> Unit,
+    onNavigateToCreatePoll: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val createProjectState by viewModel.createProjectState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState()}
     val viewedProfileState by profileViewModel.viewedProfileState.collectAsState()
     val scope = rememberCoroutineScope()
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val showBottomSheet = remember { derivedStateOf { viewedProfileState.profile != null } }
+    val pollViewModel: PollViewModel = hiltViewModel()
+    val pollState by pollViewModel.pollState.collectAsState()
+    var showPollDialog by remember { mutableStateOf(false) }
+
+    if (showPollDialog && pollState.poll != null) {
+        PollDialog(
+            poll = pollState.poll!!,
+            loggedInUserId = uiState.loggedInUserId,
+            onDismissRequest = { showPollDialog = false },
+            onVote = { pollId, optionId ->
+                pollViewModel.voteOnPoll(pollId, optionId)
+            }
+        )
+    }
 
 
     if (showBottomSheet.value) {
@@ -145,6 +163,8 @@ fun TaskScreen(
                 project = uiState.currentProject,
                 taskCount = uiState.tasks.size,
                 loggedInUserId = uiState.loggedInUserId,
+                projectHasPoll = uiState.projectHasPoll,
+
                 onNavigateBack = {
                     viewModel.goBackToProjects()
                     onNavigateBack()
@@ -152,6 +172,12 @@ fun TaskScreen(
                 onDeleteProject = { viewModel.onDeleteProjectClicked() },
                 onAddAssignees = {
                     viewModel.loadProjectForEditing(projectId, openAssigneeDialog = true)
+                },
+
+                onNavigateToCreatePoll = { onNavigateToCreatePoll(projectId) },
+                onViewPollClicked = {
+                    pollViewModel.getPoll(projectId)
+                    showPollDialog = true
                 }
             )
 
@@ -198,10 +224,15 @@ private fun ProjectHeader(
     project: ProjectResponse?,
     taskCount: Int,
     loggedInUserId: Long?,
+    projectHasPoll: Boolean,
     onNavigateBack: () -> Unit,
     onDeleteProject: () -> Unit,
-    onAddAssignees: () -> Unit
+    onAddAssignees: () -> Unit,
+    onNavigateToCreatePoll: () -> Unit,
+    onViewPollClicked: () -> Unit,
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -222,20 +253,39 @@ private fun ProjectHeader(
                 IconButton(onClick = onNavigateBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
-
                 Text(
                     "Dashboard",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
 
-                if (loggedInUserId != null && loggedInUserId == project?.createdBy) {
-                    IconButton(onClick = onDeleteProject) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete Project",
-                            tint = MaterialTheme.colorScheme.error
+                if (projectHasPoll) {
+                    IconButton(onClick = onViewPollClicked) {
+                        Icon(Icons.Default.DateRange, contentDescription = "View Poll")
+                    }
+                }
+
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (projectHasPoll) "Create / Replace Poll" else "Create Poll") },
+                            onClick = {
+                                onNavigateToCreatePoll()
+                                showMenu = false
+                            }
                         )
+                        if (loggedInUserId != null && loggedInUserId == project?.createdBy) {
+                            DropdownMenuItem(
+                                text = { Text("Delete Project", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    onDeleteProject()
+                                    showMenu = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -261,6 +311,7 @@ private fun ProjectHeader(
         }
     }
 }
+
 
 @Composable
 private fun AssigneesRow(
@@ -1039,3 +1090,159 @@ fun ConnectionCard(connection: ConnectionResponse) {
         }
     }
 }
+
+@Composable
+private fun PollDialog(
+    poll: PollResponse,
+    loggedInUserId: Long?,
+    onDismissRequest: () -> Unit,
+    onVote: (pollId: Long, optionId: Long) -> Unit,
+) {
+    Dialog(onDismissRequest = onDismissRequest) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(16.dp)
+            ) {
+                // Header with Close
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📊 Poll",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismissRequest) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Poll Question
+                Text(
+                    text = poll.question,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                // Poll Options
+                poll.options.forEach { option ->
+                    val isSelected = option.votes.any { it.user.userId == loggedInUserId }
+                    PollOptionItem(
+                        poll = poll,
+                        option = option,
+                        isSelected = isSelected,
+                        onVote = { onVote(poll.id, option.id) }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PollOptionItem(
+    poll: PollResponse,
+    option: PollOptionResponse,
+    isSelected: Boolean,
+    onVote: () -> Unit
+) {
+    val progress = if (poll.totalVotes > 0) {
+        option.voteCount.toFloat() / poll.totalVotes.toFloat()
+    } else 0f
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 800)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            )
+            .clickable(onClick = onVote)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = option.optionText,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (poll.allowMultipleAnswers) {
+                Checkbox(checked = isSelected, onCheckedChange = { onVote() })
+            } else {
+                RadioButton(selected = isSelected, onClick = onVote)
+            }
+        }
+
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
+            color = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.secondary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Voter Avatars
+            Box(modifier = Modifier.height(24.dp)) {
+                option.votes.take(5).forEachIndexed { index, vote ->
+                    AsyncImage(
+                        model = "${Constants.BASE_URL}${vote.user.profileImageUrl?.removePrefix("/")}",
+                        contentDescription = vote.user.name,
+                        modifier = Modifier
+                            .size(26.dp)
+                            .offset(x = (index * 18).dp)
+                            .clip(CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                        contentScale = ContentScale.Crop,
+                        error = rememberAsyncImagePainter(model = R.drawable.ic_person)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${option.voteCount} vote${if (option.voteCount != 1) "s" else ""}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+

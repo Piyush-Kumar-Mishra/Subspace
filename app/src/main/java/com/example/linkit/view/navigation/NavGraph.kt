@@ -1,8 +1,12 @@
 package com.example.linkit.view.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -12,9 +16,11 @@ import androidx.navigation.navArgument
 import com.example.linkit.util.UiEvent
 import com.example.linkit.view.screens.*
 import com.example.linkit.viewmodel.AuthViewModel
+import com.example.linkit.viewmodel.PollViewModel
 import com.example.linkit.viewmodel.ProfileViewModel
 import com.example.linkit.viewmodel.ProjectViewModel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.merge
 
 sealed class Screen(val route: String) {
     object Splash : Screen("splash")
@@ -24,7 +30,6 @@ sealed class Screen(val route: String) {
     object Main : Screen("main")
     object Profile : Screen("profile")
     object CreateProject : Screen("create_project")
-
     object EditProject : Screen("edit_project/{projectId}") {
         fun createRoute(projectId: Long) = "edit_project/$projectId"
     }
@@ -37,6 +42,10 @@ sealed class Screen(val route: String) {
     object TaskDetail : Screen("task_detail/{taskId}") {
         fun createRoute(taskId: Long) = "task_detail/$taskId"
     }
+    object CreatePoll : Screen("create_poll/{projectId}") {
+        fun createRoute(projectId: Long) = "create_poll/$projectId"
+    }
+
 }
 
 @Composable
@@ -46,195 +55,106 @@ fun NavGraph(
     val authViewModel: AuthViewModel = hiltViewModel()
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val projectViewModel: ProjectViewModel = hiltViewModel()
+    val pollViewModel: PollViewModel = hiltViewModel()
 
-    // Handle AuthViewModel events
+    // This listener only handles background/logic-driven navigation
     LaunchedEffect(Unit) {
-        authViewModel.uiEvent.collectLatest { event ->
+        merge(authViewModel.uiEvent, pollViewModel.uiEvent).collectLatest { event ->
             when (event) {
-                UiEvent.NavigateToGetStarted -> {
-                    // Clear all state when navigating to get started (logout)
-                    authViewModel.clearAllState()
-                    profileViewModel.clearAllState()
-                    navController.navigate(Screen.GetStarted.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                UiEvent.NavigateToAuth -> navController.navigate(Screen.Auth.route) {
-                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                }
-                UiEvent.NavigateToEnterDetails -> {
-                    // Clear profile state when navigating to enter details for new user
-                    profileViewModel.clearAllState()
-                    navController.navigate(Screen.EnterDetails.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                UiEvent.NavigateToMain -> {
-                    // Refresh profile data when navigating to main
-                    profileViewModel.refreshAllData()
-                    navController.navigate(Screen.Main.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                else -> Unit
-            }
-        }
-    }
-
-    // Handle ProfileViewModel events
-    LaunchedEffect(Unit) {
-        profileViewModel.uiEvent.collectLatest { event ->
-            when (event) {
-                UiEvent.NavigateToGetStarted -> {
-                    // Clear all state when navigating to get started (logout)
-                    authViewModel.clearAllState()
-                    profileViewModel.clearAllState()
-                    navController.navigate(Screen.GetStarted.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                UiEvent.NavigateToEnterDetails -> navController.navigate(Screen.EnterDetails.route) {
-                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                }
-                UiEvent.NavigateToMain -> {
-                    // Refresh profile data when navigating to main
-                    profileViewModel.refreshAllData()
-                    navController.navigate(Screen.Main.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                UiEvent.NavigateToProfile -> navController.navigate(Screen.Profile.route)
-                UiEvent.NavigateToAuth -> {
-                    // Clear all state when navigating back to auth
-                    authViewModel.clearAllState()
-                    profileViewModel.clearAllState()
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                else -> Unit
-            }
-        }
-    }
-
-    // Handle ProjectViewModel events
-    LaunchedEffect(Unit) {
-        projectViewModel.uiEvent.collectLatest { event ->
-            when (event) {
+                UiEvent.NavigateToGetStarted -> navController.navigate(Screen.GetStarted.route) { popUpTo(0) }
+                UiEvent.NavigateToAuth -> navController.navigate(Screen.Auth.route) { popUpTo(0) }
+                UiEvent.NavigateToEnterDetails -> navController.navigate(Screen.EnterDetails.route) { popUpTo(0) }
+                UiEvent.NavigateToMain -> navController.navigate(Screen.Main.route) { popUpTo(0) }
                 UiEvent.NavigateBack -> navController.popBackStack()
-                UiEvent.NavigateToAuth -> {
-                    authViewModel.clearAllState()
-                    profileViewModel.clearAllState()
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                UiEvent.NavigateToGetStarted -> {
-                    authViewModel.clearAllState()
-                    profileViewModel.clearAllState()
-                    navController.navigate(Screen.GetStarted.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
-                is UiEvent.NavigateToProject -> {
-                    navController.navigate(Screen.TaskScreen.createRoute(event.projectId))
-                }
-                is UiEvent.NavigateToCreateTask -> {
-                    navController.navigate(Screen.CreateTask.createRoute(event.projectId))
-                }
-                is UiEvent.NavigateToTask -> {
-                    navController.navigate(Screen.TaskDetail.createRoute(event.taskId))
-                }
                 else -> Unit
             }
         }
     }
-
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
-        composable(Screen.Splash.route) {
-            SplashScreen(viewModel = authViewModel)
-        }
-        composable(Screen.GetStarted.route) {
-            GetStartedScreen(onGetStarted = { authViewModel.onGetStarted() })
-        }
-        composable(Screen.Auth.route) {
-            AuthScreen(viewModel = authViewModel)
-        }
+        composable(Screen.Splash.route) { SplashScreen(viewModel = authViewModel) }
+        composable(Screen.GetStarted.route) { GetStartedScreen(onGetStarted = { authViewModel.onGetStarted() }) }
+        composable(Screen.Auth.route) { AuthScreen(viewModel = authViewModel) }
+
         composable(Screen.EnterDetails.route) {
             EnterDetailsScreen(
                 viewModel = profileViewModel,
-                onNavigateToMain = {
-                    navController.navigate(Screen.Main.route) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                    }
-                }
+                onNavigateToMain = { navController.navigate(Screen.Main.route) { popUpTo(0) } }
             )
         }
         composable(Screen.Main.route) {
             MainScreen(
-                onNavigateToProfile = { navController.navigate(Screen.Profile.route) },
+
                 onNavigateToCreateProject = { navController.navigate(Screen.CreateProject.route) },
-                onNavigateToTaskScreen = { projectId ->
-                    navController.navigate(Screen.TaskScreen.createRoute(projectId))
-                },
-                onNavigateToEditProject = { projectId -> // ADDED
-                    navController.navigate(Screen.EditProject.createRoute(projectId))
-                }
+                onNavigateToTaskScreen = { projectId -> navController.navigate(Screen.TaskScreen.createRoute(projectId)) },
+                onNavigateToEditProject = { projectId -> navController.navigate(Screen.EditProject.createRoute(projectId)) }
             )
         }
         composable(Screen.Profile.route) {
-            ProfileScreen(
-                viewModel = profileViewModel,
-                onNavigateBack = { navController.popBackStack() }
-            )
+            ProfileScreen(viewModel = profileViewModel, onNavigateBack = { navController.popBackStack() })
         }
         composable(Screen.CreateProject.route) {
-            CreateProjectScreen(
-                onNavigateBack = { navController.popBackStack() }
-            )
+            CreateProjectScreen(onNavigateBack = { navController.popBackStack() })
         }
         composable(
             route = Screen.EditProject.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })
-        ) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+        ) {
             EditProjectScreen(
-                projectId = projectId,
+                projectId = it.arguments?.getLong("projectId") ?: 0L,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
         composable(
-            Screen.TaskScreen.route,
+            route = Screen.TaskScreen.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })
         ) { backStackEntry ->
             val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        projectViewModel.loadProjectById(projectId)
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
             TaskScreen(
                 projectId = projectId,
                 viewModel = projectViewModel,
+                profileViewModel = profileViewModel,
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToCreateTask = { pId ->
-                    navController.navigate(Screen.CreateTask.createRoute(pId))
-                }
+                onNavigateToCreateTask = { pId -> navController.navigate(Screen.CreateTask.createRoute(pId)) },
+                onNavigateToCreatePoll = { pId -> navController.navigate(Screen.CreatePoll.createRoute(pId)) }
             )
         }
         composable(
-            Screen.CreateTask.route,
+            route = Screen.CreateTask.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })
-        ) { backStackEntry ->
-            val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+        ) {
             CreateTaskScreen(
-                projectId = projectId,
+                projectId = it.arguments?.getLong("projectId") ?: 0L,
                 viewModel = projectViewModel,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
         composable(
-            Screen.TaskDetail.route,
+            route = Screen.TaskDetail.route,
             arguments = listOf(navArgument("taskId") { type = NavType.LongType })
-        ) { backStackEntry ->
-            val taskId = backStackEntry.arguments?.getLong("taskId") ?: 0L
+        ) {
             TaskDetailScreen(
-                taskId = taskId,
+                taskId = it.arguments?.getLong("taskId") ?: 0L,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.CreatePoll.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType })
+        ) {
+            CreatePollScreen(
+                projectId = it.arguments?.getLong("projectId") ?: 0L,
+                viewModel = pollViewModel,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

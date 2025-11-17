@@ -2,9 +2,9 @@ package com.example.linkit.data.repo
 
 import com.example.linkit.data.api.ApiService
 import com.example.linkit.data.TokenStore
-import com.example.linkit.data.models.LoginRequest
-import com.example.linkit.data.models.RegisterRequest
-import com.example.linkit.data.models.RegisterResponse
+import com.example.linkit.data.models.auth_models.LoginRequest
+import com.example.linkit.data.models.auth_models.RegisterRequest
+import com.example.linkit.data.models.auth_models.RegisterResponse
 import com.example.linkit.data.models.TokenResponse
 import com.example.linkit.util.NetworkResult
 import kotlinx.coroutines.flow.Flow

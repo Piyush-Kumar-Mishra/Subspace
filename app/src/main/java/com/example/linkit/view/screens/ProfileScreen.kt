@@ -64,7 +64,7 @@ fun ProfileScreen(
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    ) { uri ->
         uri?.let {
             val bitmap = if (Build.VERSION.SDK_INT < 28) {
                 MediaStore.Images.Media.getBitmap(context.contentResolver, it)
@@ -92,11 +92,6 @@ fun ProfileScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Profile") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
                 actions = {
                     IconButton(onClick = { viewModel.refreshAllData() }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Refresh")
@@ -367,7 +362,6 @@ private fun ConnectionItem(connection: ConnectionResponse) {
         }
     }
 }
-
 
 @Composable
 private fun AddConnectionBottomSheet(

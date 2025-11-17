@@ -158,12 +158,3 @@ data class UserSearchResult(
     val isConnected: Boolean = false
 )
 
-@Serializable
-data class WebSocketMessage(
-    val type: String,
-    val taskId: Long,
-    val senderId: Long,
-    val senderName: String,
-    val content: String? = null,
-    val timestamp: String
-)

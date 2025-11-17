@@ -8,7 +8,13 @@ import retrofit2.http.*
 interface ProjectApiService {
 
     @GET("api/projects")
-    suspend fun getProjects(): Response<ProjectsResponse>
+    suspend fun getProjects(
+        @Query("priority") priority: String? = null,
+        @Query("date") date: String? = null,
+        @Query("today") today: Boolean? = null,
+        @Query("startDateFrom") startDateFrom: String? = null,
+        @Query("startDateTo") startDateTo: String? = null
+    ): Response<ProjectsResponse>
 
     @POST("api/projects")
     suspend fun createProject(@Body request: CreateProjectRequest): Response<ProjectResponse>
@@ -64,4 +70,20 @@ interface ProjectApiService {
 
     @POST("api/notifications/register")
     suspend fun registerDeviceToken(@Body request: NotificationRequest): Response<Unit>
+
+    @POST("api/projects/{projectId}/poll")
+    suspend fun createProjectPoll(
+        @Path("projectId") projectId: Long,
+        @Body request: CreatePollRequest
+    ): Response<PollResponse>
+
+    @GET("api/projects/{projectId}/poll")
+    suspend fun getProjectPoll(@Path("projectId") projectId: Long): Response<PollResponse>
+
+    @POST("api/polls/{pollId}/options/{optionId}/vote")
+    suspend fun voteOnPoll(
+        @Path("pollId") pollId: Long,
+        @Path("optionId") optionId: Long
+    ): Response<PollResponse>
+
 }

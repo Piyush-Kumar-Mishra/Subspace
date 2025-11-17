@@ -12,9 +12,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
-import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.File
 import javax.inject.Inject
 
 class ProjectRepository @Inject constructor(
@@ -24,26 +22,32 @@ class ProjectRepository @Inject constructor(
     private val context: Context
 ) {
 
-    fun getProjects(): Flow<NetworkResult<List<ProjectResponse>>> = flow {
+    fun getProjects(): Flow<NetworkResult<List<ProjectResponse>>> =
+        getProjectsFiltered(null, null, null, null)
+
+
+    fun getProjectsFiltered(
+        priority: String? = null,
+        date: String? = null,
+        startDateFrom: String? = null,
+        startDateTo: String? = null
+    ): Flow<NetworkResult<List<ProjectResponse>>> = flow {
         emit(NetworkResult.Loading())
         try {
             val token = tokenStore.token.first()
             if (token != null && networkUtils.isInternetAvailable()) {
-                val response = api.getProjects()
+                val response = api.getProjects(priority = priority, date = date, startDateFrom = startDateFrom, startDateTo = startDateTo)
                 if (response.isSuccessful) {
                     response.body()?.let {
                         emit(NetworkResult.Success(it.projects))
                     } ?: emit(NetworkResult.Error("Empty response"))
-                }
-                else {
+                } else {
                     emit(NetworkResult.Error(getErrorMessage(response.code(), response.errorBody()?.string())))
                 }
-            }
-            else {
+            } else {
                 emit(NetworkResult.Error("No internet connection or invalid token"))
             }
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) {
             emit(NetworkResult.Error("Network error: ${e.message}"))
         }
     }
@@ -299,7 +303,6 @@ class ProjectRepository @Inject constructor(
     }
 
 
-
     fun registerDeviceToken(token: String, platform: String): Flow<NetworkResult<Unit>> = flow {
         emit(NetworkResult.Loading())
         try {
@@ -354,7 +357,6 @@ class ProjectRepository @Inject constructor(
             emit(NetworkResult.Error("Network error: ${e.message}"))
         }
     }
-
 
 }
 

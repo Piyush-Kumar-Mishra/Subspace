@@ -5,8 +5,6 @@ import android.widget.Toast
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +16,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.linkit.ui.theme.bcg2
@@ -36,6 +36,7 @@ import com.example.linkit.util.UiEvent
 import com.example.linkit.view.components.LoadingIndicator
 import com.example.linkit.viewmodel.AuthViewModel
 import kotlinx.coroutines.flow.collectLatest
+
 
 @Composable
 fun AuthScreen(viewModel: AuthViewModel) {
@@ -63,13 +64,7 @@ fun AuthScreen(viewModel: AuthViewModel) {
                 .padding(padding)
 //                .background(bcg3)
         ) {
-            Image(
-                painter = painterResource(id = R.drawable.auth_bcg2),
-                contentDescription = "Background",
-                modifier = Modifier.align(Alignment.BottomEnd).size(height = 360.dp, width = 500.dp)
-            )
 
-            // Main content column, centered on the screen
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -173,9 +168,9 @@ fun AuthScreen(viewModel: AuthViewModel) {
                         pressedElevation = 4.dp
                     ),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = androidx.compose.material3.MaterialTheme.colorScheme.secondary, // Set the background color
-                        contentColor = Color.White, // Set the text color
-                        disabledContainerColor = Color.Gray // Set background when disabled
+                        containerColor = bcg2, // Set the background color
+                        contentColor = Color.Black, // Set the text color
+                        disabledContainerColor = bcg2 // Set background when disabled
                 )
                 ) {
                     Box(
@@ -199,7 +194,6 @@ fun AuthScreen(viewModel: AuthViewModel) {
     }
 }
 
-
 @Composable
 fun AuthOptionCard(
     modifier: Modifier = Modifier,
@@ -210,22 +204,19 @@ fun AuthOptionCard(
     onClick: () -> Unit
 ) {
     val dropShadowStyle = TextStyle(
-        color = Color.White,
+        color = Color.Black,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 28.sp,
-        shadow = Shadow(
-            color = Color.Black,
-            offset = Offset(x = 5f, y = 5f),
-            blurRadius = 0.5f
-        )
+        fontSize = 28.sp
     )
 
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier
+            .clickable(onClick = onClick)
+            .shadow(12.dp, RoundedCornerShape(12.dp)),
         elevation = if (isSelected) 12.dp else 4.dp,
         shape = RoundedCornerShape(12.dp),
-        backgroundColor = androidx.compose.material3.MaterialTheme.colorScheme.secondary,
-        border = if (isSelected) BorderStroke(3.dp, Color.Black) else null
+        backgroundColor = Color.White,
+        border = if (isSelected) BorderStroke(3.dp, bcg2) else null
     ) {
         Column(
             modifier = Modifier
@@ -234,29 +225,21 @@ fun AuthOptionCard(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Image(
-                painter = painterResource(id = imageRes),
-                contentDescription = title,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
             Text(
                 text = title,
-                style = dropShadowStyle
+                style = dropShadowStyle,
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
             Text(
                 text = subtitle,
-                color = Color.White.copy(alpha = 0.8f),
+                color = Color.Gray,
                 style = MaterialTheme.typography.caption,
                 textAlign = TextAlign.Center
             )
         }
     }
 }
+

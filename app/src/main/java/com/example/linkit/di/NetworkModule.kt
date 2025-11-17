@@ -11,6 +11,7 @@ import com.example.linkit.data.local.dao.ConnectionDao
 import com.example.linkit.data.local.dao.UserDao
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ImageRepository
+import com.example.linkit.data.repo.PollRepository
 import com.example.linkit.data.repo.ProfileRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.network.AuthInterceptor
@@ -170,6 +171,17 @@ object NetworkModule {
     ): ProjectRepository {
         return ProjectRepository(projectApiService, tokenStore, networkUtils,context)
     }
+
+    @Provides
+    @Singleton
+    fun providePollRepository(
+        projectApiService: ProjectApiService,
+        tokenStore: TokenStore,
+        networkUtils: NetworkUtils
+    ): PollRepository {
+        return PollRepository(projectApiService, tokenStore, networkUtils)
+    }
+
 }
 
 
