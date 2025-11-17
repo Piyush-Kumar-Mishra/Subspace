@@ -11,6 +11,7 @@ import com.example.linkit.data.local.dao.ConnectionDao
 import com.example.linkit.data.local.dao.UserDao
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ImageRepository
+import com.example.linkit.data.repo.PollRepository
 import com.example.linkit.data.repo.ProfileRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.network.AuthInterceptor
@@ -33,7 +34,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
-
     private val Context.dataStore by preferencesDataStore("auth_prefs")
 
     @Provides
@@ -166,10 +166,22 @@ object NetworkModule {
     fun provideProjectRepository(
         projectApiService: ProjectApiService,
         tokenStore: TokenStore,
-        networkUtils: NetworkUtils
+        networkUtils: NetworkUtils,
+        @ApplicationContext context: Context
     ): ProjectRepository {
-        return ProjectRepository(projectApiService, tokenStore, networkUtils)
+        return ProjectRepository(projectApiService, tokenStore, networkUtils,context)
     }
+
+    @Provides
+    @Singleton
+    fun providePollRepository(
+        projectApiService: ProjectApiService,
+        tokenStore: TokenStore,
+        networkUtils: NetworkUtils
+    ): PollRepository {
+        return PollRepository(projectApiService, tokenStore, networkUtils)
+    }
+
 }
 
 

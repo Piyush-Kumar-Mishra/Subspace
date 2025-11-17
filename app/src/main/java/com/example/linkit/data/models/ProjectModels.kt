@@ -62,6 +62,7 @@ data class CreateTaskRequest(
 @Serializable
 data class UpdateTaskRequest(
     val name: String,
+    val description: String?,
     val assigneeId: Long,
     val startDate: String,
     val endDate: String,
@@ -117,6 +118,7 @@ data class TaskAttachmentResponse(
     val taskId: Long,
     val fileName: String,
     val filePath: String,
+    val downloadUrl: String,
     val fileSize: Long,
     val mimeType: String,
     val uploadedBy: ProjectAssigneeResponse,
@@ -156,12 +158,3 @@ data class UserSearchResult(
     val isConnected: Boolean = false
 )
 
-@Serializable
-data class WebSocketMessage(
-    val type: String,
-    val taskId: Long,
-    val senderId: Long,
-    val senderName: String,
-    val content: String? = null,
-    val timestamp: String
-)

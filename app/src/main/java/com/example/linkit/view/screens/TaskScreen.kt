@@ -1,11 +1,24 @@
 package com.example.linkit.view.screens
 
+import android.app.DownloadManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
@@ -23,29 +36,33 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import coil.compose.rememberAsyncImagePainter
 import com.example.linkit.R
-import com.example.linkit.data.models.ConnectionResponse
-import com.example.linkit.data.models.ProjectAssigneeResponse
-import com.example.linkit.data.models.ProjectResponse
-import com.example.linkit.data.models.TaskResponse
-import com.example.linkit.data.models.TaskStatus
-import com.example.linkit.data.models.UserSearchResult
+import com.example.linkit.data.models.*
 import com.example.linkit.util.Constants
 import com.example.linkit.util.UiEvent
+import com.example.linkit.viewmodel.PollViewModel
 import com.example.linkit.viewmodel.ProfileViewModel
 import com.example.linkit.viewmodel.ProjectViewModel
 import com.example.linkit.viewmodel.ViewedProfileState
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -54,19 +71,33 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun TaskScreen(
     projectId: Long,
-    viewModel: ProjectViewModel = hiltViewModel(),
+    viewModel: ProjectViewModel,
     profileViewModel: ProfileViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToCreateTask: (Long) -> Unit
+    onNavigateToCreateTask: (Long) -> Unit,
+    onNavigateToCreatePoll: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val createProjectState by viewModel.createProjectState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState()}
     val viewedProfileState by profileViewModel.viewedProfileState.collectAsState()
-     val scope = rememberCoroutineScope()
-
+    val scope = rememberCoroutineScope()
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val showBottomSheet = remember { derivedStateOf { viewedProfileState.profile != null } }
+    val pollViewModel: PollViewModel = hiltViewModel()
+    val pollState by pollViewModel.pollState.collectAsState()
+    var showPollDialog by remember { mutableStateOf(false) }
+
+    if (showPollDialog && pollState.poll != null) {
+        PollDialog(
+            poll = pollState.poll!!,
+            loggedInUserId = uiState.loggedInUserId,
+            onDismissRequest = { showPollDialog = false },
+            onVote = { pollId, optionId ->
+                pollViewModel.voteOnPoll(pollId, optionId)
+            }
+        )
+    }
 
 
     if (showBottomSheet.value) {
@@ -88,7 +119,7 @@ fun TaskScreen(
         }
     }
 
-LaunchedEffect(projectId) {
+    LaunchedEffect(projectId) {
         viewModel.loadProjectById(projectId)
         viewModel.loadProjectTasks(projectId)
         viewModel.uiEvent.collectLatest { event ->
@@ -131,8 +162,9 @@ LaunchedEffect(projectId) {
             ProjectHeader(
                 project = uiState.currentProject,
                 taskCount = uiState.tasks.size,
-
                 loggedInUserId = uiState.loggedInUserId,
+                projectHasPoll = uiState.projectHasPoll,
+
                 onNavigateBack = {
                     viewModel.goBackToProjects()
                     onNavigateBack()
@@ -140,6 +172,12 @@ LaunchedEffect(projectId) {
                 onDeleteProject = { viewModel.onDeleteProjectClicked() },
                 onAddAssignees = {
                     viewModel.loadProjectForEditing(projectId, openAssigneeDialog = true)
+                },
+
+                onNavigateToCreatePoll = { onNavigateToCreatePoll(projectId) },
+                onViewPollClicked = {
+                    pollViewModel.getPoll(projectId)
+                    showPollDialog = true
                 }
             )
 
@@ -155,16 +193,16 @@ LaunchedEffect(projectId) {
             } else {
                 TaskTimeline(
                     tasks = uiState.tasks,
-//                    project = uiState.currentProject,
+                    attachmentsByTask = uiState.attachmentsByTask,
+                    loggedInUserId = uiState.loggedInUserId,
                     onAssigneeClick = { userId ->
                         profileViewModel.viewUserProfile(userId)
                     },
+                    viewModel = viewModel,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
         }
-
-
 
         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             if (uiState.currentProject != null) {
@@ -180,15 +218,21 @@ LaunchedEffect(projectId) {
     }
 }
 
+
 @Composable
 private fun ProjectHeader(
     project: ProjectResponse?,
     taskCount: Int,
     loggedInUserId: Long?,
+    projectHasPoll: Boolean,
     onNavigateBack: () -> Unit,
     onDeleteProject: () -> Unit,
-    onAddAssignees: () -> Unit
+    onAddAssignees: () -> Unit,
+    onNavigateToCreatePoll: () -> Unit,
+    onViewPollClicked: () -> Unit,
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -209,26 +253,39 @@ private fun ProjectHeader(
                 IconButton(onClick = onNavigateBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
-
                 Text(
                     "Dashboard",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
 
-                LaunchedEffect(project, loggedInUserId) {
-                    println("DEBUG: loggedInUserId = $loggedInUserId")
-                    println("DEBUG: project?.createdBy = ${project?.createdBy}")
-                    println("DEBUG: project = $project")
+                if (projectHasPoll) {
+                    IconButton(onClick = onViewPollClicked) {
+                        Icon(Icons.Default.DateRange, contentDescription = "View Poll")
+                    }
                 }
 
-                if (loggedInUserId != null && loggedInUserId == project?.createdBy) {
-                    IconButton(onClick = onDeleteProject) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete Project",
-                            tint = MaterialTheme.colorScheme.error
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                    }
+                    DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (projectHasPoll) "Create / Replace Poll" else "Create Poll") },
+                            onClick = {
+                                onNavigateToCreatePoll()
+                                showMenu = false
+                            }
                         )
+                        if (loggedInUserId != null && loggedInUserId == project?.createdBy) {
+                            DropdownMenuItem(
+                                text = { Text("Delete Project", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    onDeleteProject()
+                                    showMenu = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -254,6 +311,7 @@ private fun ProjectHeader(
         }
     }
 }
+
 
 @Composable
 private fun AssigneesRow(
@@ -299,9 +357,11 @@ private fun AssigneesRow(
 @Composable
 private fun TaskTimeline(
     tasks: List<TaskResponse>,
-//    project: ProjectResponse?,
+    attachmentsByTask: Map<Long, List<TaskAttachmentResponse>>,
+    loggedInUserId: Long?,
     onAssigneeClick: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: ProjectViewModel
 ) {
     val sortedTasks = remember(tasks) {
         tasks.sortedByDescending { it.createdAt }
@@ -313,12 +373,11 @@ private fun TaskTimeline(
     ) {
         itemsIndexed(sortedTasks) { index, task ->
             val date = LocalDate.parse(task.createdAt.take(10))
-
             val isFirstInGroup = index == 0 || date != LocalDate.parse(sortedTasks[index - 1].createdAt.take(10))
             val isLastInGroup = index == sortedTasks.lastIndex || date != LocalDate.parse(sortedTasks[index + 1].createdAt.take(10))
             val previousStatus = if (index > 0) TaskStatus.valueOf(sortedTasks[index - 1].status) else null
-
-
+            val attachments = attachmentsByTask[task.id] ?: emptyList()
+            var cardSize by remember { mutableStateOf(IntSize.Zero) }
 
             Column {
                 if (isFirstInGroup) {
@@ -330,8 +389,9 @@ private fun TaskTimeline(
                     )
                 }
 
-                Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+                Row {
                     TimelineGutter(
+                        modifier = Modifier.height(with(LocalDensity.current) { cardSize.height.toDp() }),
                         status = TaskStatus.valueOf(task.status),
                         previousStatus = previousStatus,
                         isFirstInGroup = isFirstInGroup,
@@ -339,8 +399,17 @@ private fun TaskTimeline(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     TimelineTaskCard(
+                        modifier = Modifier.onSizeChanged { cardSize = it },
                         task = task,
-                        onAssigneeClick = onAssigneeClick
+                        attachments = attachments,
+                        loggedInUserId = loggedInUserId,
+                        onAssigneeClick = onAssigneeClick,
+                        onStatusChange = { newStatus ->
+                            viewModel.updateTaskStatus(task.id, newStatus)
+                        },
+                        onUploadFile = { uri , fileName->
+                            viewModel.uploadAttachment(task.id, uri, fileName)
+                        }
                     )
                 }
             }
@@ -350,6 +419,7 @@ private fun TaskTimeline(
 
 @Composable
 fun TimelineGutter(
+    modifier: Modifier = Modifier,
     status: TaskStatus,
     previousStatus: TaskStatus?,
     isFirstInGroup: Boolean,
@@ -373,9 +443,7 @@ fun TimelineGutter(
     val dashedPathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
 
     Box(
-        modifier = Modifier
-            .width(32.dp)
-            .fillMaxHeight()
+        modifier = modifier.width(32.dp)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val dotRadius = 6.dp.toPx()
@@ -411,10 +479,15 @@ fun TimelineGutter(
 
 @Composable
 private fun TimelineTaskCard(
+    modifier: Modifier = Modifier,
     task: TaskResponse,
-    onAssigneeClick: (Long) -> Unit
-
+    attachments: List<TaskAttachmentResponse>,
+    loggedInUserId: Long?,
+    onAssigneeClick: (Long) -> Unit,
+    onStatusChange: (TaskStatus) -> Unit,
+    onUploadFile: (Uri, String) -> Unit
 ) {
+    val context = LocalContext.current
     val status = TaskStatus.valueOf(task.status)
     val statusColor = when (status) {
         TaskStatus.TODO -> Color.Gray
@@ -422,34 +495,72 @@ private fun TimelineTaskCard(
         TaskStatus.COMPLETED -> Color(0xFF673AB7)
     }
 
+    val canChangeStatus = loggedInUserId == task.assignee.userId
+    var showStatusMenu by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            val fileName = getFileName(context, it)
+            onUploadFile(it, fileName)
+        }
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(bottom = 12.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = status.displayName,
-                    color = statusColor,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Text(
-                    text = "Nº ${task.id}",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.Gray
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = task.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box {
+                    val statusModifier = if (canChangeStatus) {
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { showStatusMenu = true }
+                            .padding(4.dp)
+                    } else {
+                        Modifier.padding(4.dp)
+                    }
 
+                    Row(modifier = statusModifier, verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = status.displayName,
+                            color = statusColor,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (canChangeStatus) {
+                            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Change Status", tint = statusColor)
+                        }
+                    }
+
+                    if (canChangeStatus) {
+                        DropdownMenu(expanded = showStatusMenu, onDismissRequest = { showStatusMenu = false }) {
+                            TaskStatus.values().forEach { statusOption ->
+                                DropdownMenuItem(
+                                    text = { Text(statusOption.displayName) },
+                                    onClick = {
+                                        onStatusChange(statusOption)
+                                        showStatusMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+                Text(text = "Nº ${task.id}", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = task.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             if (!task.description.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
@@ -461,22 +572,31 @@ private fun TimelineTaskCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom) {
+            if (attachments.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    modifier = Modifier.height(40.dp),
+                    horizontalArrangement = Arrangement.spacedBy(-15.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(attachments) { attachment ->
+                        AttachmentChip(attachment = attachment)
+                    }
+                }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom
-            ) {
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
                     CountIndicator(icon = Icons.AutoMirrored.Filled.ArrowBack, count = task.messageCount)
-                    CountIndicator(icon = Icons.Filled.Check, count = task.attachmentCount)
+                    CountIndicator(icon = Icons.Filled.Add, count = task.attachmentCount)
+                    IconButton(onClick = { filePickerLauncher.launch("*/*") }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Attachment", tint = MaterialTheme.colorScheme.primary)
+                    }
                 }
 
                 Column(horizontalAlignment = Alignment.End) {
@@ -486,17 +606,97 @@ private fun TimelineTaskCard(
                         onClick = { onAssigneeClick(task.assignee.userId) }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "By ${task.creator.name}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.Gray
-                    )
-
+                    Text(text = "By ${task.creator.name}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
                 }
             }
         }
     }
 }
+
+
+private fun getFileName(context: Context, uri: Uri): String {
+    var fileName = "unknown_file"
+    val cursor = context.contentResolver.query(uri, null, null, null, null)
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (nameIndex != -1) {
+                fileName = it.getString(nameIndex)
+            }
+        }
+    }
+    return fileName
+}
+
+
+@Composable
+fun AttachmentChip(attachment: TaskAttachmentResponse) {
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // Launcher to request storage permission on older Android versions
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            scope.launch { snackbarHostState.showSnackbar("Permission granted. Please tap again to download.") }
+        } else {
+            scope.launch { snackbarHostState.showSnackbar("Storage permission is required to download files.") }
+        }
+    }
+
+    OutlinedButton(
+        onClick = {
+            val downloadUrl = "${Constants.BASE_URL}${attachment.downloadUrl.removePrefix("/")}"
+
+            Log.d("Download", "download from server-provided URL: $downloadUrl")
+
+            val request = DownloadManager.Request(Uri.parse(downloadUrl))
+                .setTitle(attachment.fileName)
+                .setDescription("Downloading...")
+                .setMimeType(attachment.mimeType)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, attachment.fileName)
+
+
+            // Check for permissions and enqueue the download.
+            // For Android 10 (API 29) and above, no special permission is needed to save to the public Downloads directory.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                downloadManager.enqueue(request)
+                scope.launch { snackbarHostState.showSnackbar("Download started...") }
+            } else {
+                // For Android 9 (API 28) and below, we must have storage permission.
+                when (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                    PackageManager.PERMISSION_GRANTED -> {
+                        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        downloadManager.enqueue(request)
+                        scope.launch { snackbarHostState.showSnackbar("Download started...") }
+                    }
+                    else -> {
+                        // Request permission if it hasn't been granted.
+                        permissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    }
+                }
+            }
+        },
+        modifier = Modifier.widthIn(max = 150.dp),
+        shape = RoundedCornerShape(8.dp),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Send,
+            contentDescription = "Download Attachment",
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(attachment.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+
+    SnackbarHost(hostState = snackbarHostState, modifier = Modifier.padding(16.dp))
+}
+
 
 @Composable
 private fun CountIndicator(icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int) {
@@ -507,11 +707,22 @@ private fun CountIndicator(icon: androidx.compose.ui.graphics.vector.ImageVector
 }
 
 @Composable
-private fun AssigneeAvatar(assignee: ProjectAssigneeResponse, size: androidx.compose.ui.unit.Dp, onClick: (() -> Unit)? = null) {
+private fun AssigneeAvatar(
+    assignee: ProjectAssigneeResponse,
+    size: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
     val clickableModifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
+
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
+            .border(
+                width = 2.dp,
+                color = MaterialTheme.colorScheme.secondary,
+                shape = CircleShape
+            )
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .then(clickableModifier)
@@ -535,7 +746,6 @@ private fun AssigneeAvatar(assignee: ProjectAssigneeResponse, size: androidx.com
         }
     }
 }
-
 
 @Composable
 private fun EmptyTasksView(modifier: Modifier = Modifier, onCreateTask: () -> Unit) {
@@ -880,3 +1090,159 @@ fun ConnectionCard(connection: ConnectionResponse) {
         }
     }
 }
+
+@Composable
+private fun PollDialog(
+    poll: PollResponse,
+    loggedInUserId: Long?,
+    onDismissRequest: () -> Unit,
+    onVote: (pollId: Long, optionId: Long) -> Unit,
+) {
+    Dialog(onDismissRequest = onDismissRequest) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(16.dp)
+            ) {
+                // Header with Close
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📊 Poll",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismissRequest) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close"
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Poll Question
+                Text(
+                    text = poll.question,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold
+                    ),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                // Poll Options
+                poll.options.forEach { option ->
+                    val isSelected = option.votes.any { it.user.userId == loggedInUserId }
+                    PollOptionItem(
+                        poll = poll,
+                        option = option,
+                        isSelected = isSelected,
+                        onVote = { onVote(poll.id, option.id) }
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PollOptionItem(
+    poll: PollResponse,
+    option: PollOptionResponse,
+    isSelected: Boolean,
+    onVote: () -> Unit
+) {
+    val progress = if (poll.totalVotes > 0) {
+        option.voteCount.toFloat() / poll.totalVotes.toFloat()
+    } else 0f
+
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 800)
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            )
+            .clickable(onClick = onVote)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = option.optionText,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (poll.allowMultipleAnswers) {
+                Checkbox(checked = isSelected, onCheckedChange = { onVote() })
+            } else {
+                RadioButton(selected = isSelected, onClick = onVote)
+            }
+        }
+
+        LinearProgressIndicator(
+            progress = { animatedProgress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(50)),
+            color = if (isSelected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.secondary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Voter Avatars
+            Box(modifier = Modifier.height(24.dp)) {
+                option.votes.take(5).forEachIndexed { index, vote ->
+                    AsyncImage(
+                        model = "${Constants.BASE_URL}${vote.user.profileImageUrl?.removePrefix("/")}",
+                        contentDescription = vote.user.name,
+                        modifier = Modifier
+                            .size(26.dp)
+                            .offset(x = (index * 18).dp)
+                            .clip(CircleShape)
+                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape),
+                        contentScale = ContentScale.Crop,
+                        error = rememberAsyncImagePainter(model = R.drawable.ic_person)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${option.voteCount} vote${if (option.voteCount != 1) "s" else ""}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+

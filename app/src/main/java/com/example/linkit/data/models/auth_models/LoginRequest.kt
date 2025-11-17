@@ -1,4 +1,4 @@
-package com.example.linkit.data.models
+package com.example.linkit.data.models.auth_models
 
 data class LoginRequest(
     val username: String,

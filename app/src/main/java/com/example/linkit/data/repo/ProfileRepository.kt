@@ -364,7 +364,6 @@ class ProfileRepository @Inject constructor(
             connectionDao.insertConnections(connectionEntities)
         }
         catch (e: Exception) {
-            // caching errors
         }
     }
 
@@ -480,7 +479,7 @@ class ProfileRepository @Inject constructor(
             userDao.insertUser(userEntity)
         }
         catch (e: Exception) {
-            // Caching errors should not crash the app
+
         }
     }
 }

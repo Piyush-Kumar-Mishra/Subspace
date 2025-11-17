@@ -3,11 +3,11 @@ package com.example.linkit.data.api
 import com.example.linkit.data.models.AddConnectionRequest
 import com.example.linkit.data.models.ConnectionsResponse
 import com.example.linkit.data.models.CreateProfileRequest
-import com.example.linkit.data.models.LoginRequest
+import com.example.linkit.data.models.auth_models.LoginRequest
 import com.example.linkit.data.models.ProfileResponse
 import com.example.linkit.data.models.ProfileStatusResponse
-import com.example.linkit.data.models.RegisterRequest
-import com.example.linkit.data.models.RegisterResponse
+import com.example.linkit.data.models.auth_models.RegisterRequest
+import com.example.linkit.data.models.auth_models.RegisterResponse
 import com.example.linkit.data.models.SearchUsersResponse
 import com.example.linkit.data.models.TokenResponse
 import com.example.linkit.data.models.UpdateProfileRequest

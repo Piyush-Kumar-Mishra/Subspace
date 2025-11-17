@@ -1,29 +1,33 @@
-
 package com.example.linkit.view.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
+import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
@@ -33,12 +37,13 @@ import com.example.linkit.data.models.ProjectPriority
 import com.example.linkit.data.models.ProjectResponse
 import com.example.linkit.util.Constants
 import com.example.linkit.util.UiEvent
+import com.example.linkit.viewmodel.ProjectFilter
 import com.example.linkit.viewmodel.ProjectViewModel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.LocalDateTime
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,27 +54,26 @@ fun DashboardScreen(
     onNavigateToEditProject: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarHost = remember { SnackbarHostState() }
+    val projectListState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.uiEvent.collectLatest { event ->
-            when (event) {
-                is UiEvent.ShowToast -> snackbarHostState.showSnackbar(event.msg)
-                else -> Unit
-            }
+            if (event is UiEvent.ShowToast) snackbarHost.showSnackbar(event.msg)
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
                 title = { Text("My Projects") },
                 actions = {
                     IconButton(onClick = { viewModel.loadProjects() }) {
                         Icon(
-                            painter = painterResource(R.drawable.ic_refresh),
-                            contentDescription = "Refresh"
+                            painterResource(R.drawable.ic_refresh),
+                            contentDescription = null
                         )
                     }
                 }
@@ -78,43 +82,243 @@ fun DashboardScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToCreateProject,
-                containerColor = MaterialTheme.colorScheme.primary
+                shape = RoundedCornerShape(18.dp)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Project")
+                Icon(Icons.Default.Add, null)
             }
-        }
+        },
+        contentWindowInsets = WindowInsets(0)
     ) { padding ->
-        Box(
-            modifier = Modifier
+
+        Column(
+            Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .background(Color.White)
         ) {
-            when {
-                uiState.isLoading -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
+
+        Box(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF4F5F7))
+            ) {
+                AnimatedCalendar(
+                    selectedDate = uiState.selectedDate,
+                    currentMonth = uiState.currentMonth,
+                    daysWithProjects = uiState.daysWithProjectsInMonth,
+                    onNext = viewModel::goToNextMonth,
+                    onPrev = viewModel::goToPreviousMonth,
+                    onDateClicked = viewModel::onDateSelected
+                )
+            }
+
+            LazyColumn(
+                state = projectListState,
+                contentPadding = PaddingValues(bottom = 120.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+
+                item {
+                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        FilterChipsRow(
+                            selected = uiState.selectedFilter,
+                            onSelected = {
+                                viewModel.clearSelectedDate()
+                                viewModel.applyFilter(it)
+                            }
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
                 }
-                uiState.projects.isEmpty() -> {
-                    EmptyProjectsView(
-                        modifier = Modifier.align(Alignment.Center),
-                        onCreateProject = onNavigateToCreateProject
-                    )
+
+                if (uiState.isLoading) {
+                    item {
+                        Box(Modifier.fillMaxWidth(), Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else if (uiState.projects.isEmpty()) {
+                    item {
+                        EmptyProjectsView(onNavigateToCreateProject)
+                    }
+                } else {
+                    items(uiState.projects) { project ->
+                        ProjectCardItem(
+                            project = project,
+                            onClick = {
+                                viewModel.selectProject(project)
+                                onNavigateToTaskScreen(project.id)
+                            },
+                            onEdit = { onNavigateToEditProject(project.id) }
+                        )
+                    }
                 }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+            }
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(end = 14.dp, bottom = 110.dp),
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = projectListState.firstVisibleItemIndex > 1
+                ) {
+                    FloatingActionButton(
+                        onClick = {
+                            scope.launch {
+                                projectListState.animateScrollToItem(0)
+                            }
+                        },
+                        modifier = Modifier.size(46.dp)
                     ) {
-                        items(uiState.projects) { project ->
-                            ProjectCard(
-                                project = project,
-                                onClick = {
-                                    viewModel.selectProject(project)
-                                    onNavigateToTaskScreen(project.id)
+                        Icon(Icons.Default.KeyboardArrowUp, null)
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@OptIn(ExperimentalAnimationApi::class)
+@Composable
+fun AnimatedCalendar(
+    selectedDate: LocalDate?,
+    currentMonth: YearMonth,
+    daysWithProjects: Set<Int>,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+    onDateClicked: (LocalDate?) -> Unit
+) {
+    val today = LocalDate.now()
+    val density = LocalDensity.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(currentMonth) {
+        if (currentMonth.month == today.month && currentMonth.year == today.year) {
+            val index = today.dayOfMonth - 1
+            scope.launch {
+
+                val itemWidthPx = with(density) { 62.dp.toPx() }
+
+                val centerOffset =
+                    (listState.layoutInfo.viewportSize.width / 2) - (itemWidthPx / 2)
+                listState.scrollToItem(index, -centerOffset.toInt())
+            }
+        }
+    }
+
+    Column(
+        Modifier
+            .padding(
+                horizontal = 14.dp,
+                vertical = 14.dp
+            )
+    ) {
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            IconButton(onPrev) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+            }
+
+            Text(
+                "${
+                    currentMonth.month.name.lowercase().replaceFirstChar { it.uppercase() }
+                } ${currentMonth.year}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            )
+
+            IconButton(onNext) {
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        AnimatedContent(
+            targetState = currentMonth,
+            transitionSpec = {
+                slideInHorizontally { it } + fadeIn() togetherWith
+                        slideOutHorizontally { -it } + fadeOut()
+            }
+        ) { month ->
+
+            LazyRow(
+                state = listState,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.padding(vertical = 6.dp)
+            ) {
+
+                items(month.lengthOfMonth()) { index ->
+
+                    val day = index + 1
+                    val date = month.atDay(day)
+                    val isToday = date == today
+                    val isSelected = date == selectedDate
+
+                    val scale by animateFloatAsState(
+                        if (isSelected) 1.12f else 1f,
+                        tween(200)
+                    )
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.scale(scale)
+                    ) {
+
+                        Text(
+                            date.dayOfWeek.name.take(3),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.DarkGray
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        Surface(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clickable {
+                                    if (isSelected) onDateClicked(null)
+                                    else onDateClicked(date)
                                 },
-                                onEdit = { onNavigateToEditProject(project.id) }
+                            shape = CircleShape,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                Color.Transparent,
+                            border = if (isToday && !isSelected)
+                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                            else null
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                    day.toString(),
+                                    color = if (isSelected)
+                                        MaterialTheme.colorScheme.onPrimary
+                                    else Color.Black,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        if (daysWithProjects.contains(day)) {
+                            Box(
+                                Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
                             )
                         }
                     }
@@ -125,7 +329,48 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun ProjectCard(
+fun FilterChipsRow(
+    selected: ProjectFilter,
+    onSelected: (ProjectFilter) -> Unit
+) {
+    val filters = listOf(
+        ProjectFilter.ALL to "All",
+        ProjectFilter.TODAY to "Today",
+        ProjectFilter.HIGH to "High",
+        ProjectFilter.MEDIUM to "Medium",
+        ProjectFilter.LOW to "Low"
+    )
+
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        items(filters) { (filter, label) ->
+
+            val sel = selected == filter
+
+            FilterChip(
+                selected = sel,
+                onClick = { onSelected(filter) },
+                label = {
+                    Text(
+                        label,
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
+                shape = RoundedCornerShape(16.dp),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = if (sel)
+                        MaterialTheme.colorScheme.primary else Color.White,
+                    labelColor = if (sel)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        Color.Black
+                )
+            )
+        }
+    }
+}
+
+@Composable
+fun ProjectCardItem(
     project: ProjectResponse,
     onClick: () -> Unit,
     onEdit: () -> Unit
@@ -133,250 +378,190 @@ private fun ProjectCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            .padding(horizontal = 10.dp)
+            .shadow(2.dp, RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
+
+        Column(Modifier.padding(14.dp)) {
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = project.name,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        project.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
 
                     if (!project.description.isNullOrBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = project.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            project.description,
                             maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PriorityBadge(priority = ProjectPriority.valueOf(project.priority))
+                Row {
+                    PriorityBadge(ProjectPriority.valueOf(project.priority))
                     IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Edit Project")
+                        Icon(Icons.Default.Edit, null)
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text(
-                        text = "Start Date",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatDate(project.startDate),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text("Start Date", style = MaterialTheme.typography.labelSmall)
+                    Text(formatDate(project.startDate))
                 }
 
-                Text(
-                    text = "${project.taskCount} tasks",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Text("${project.taskCount} tasks")
             }
 
             if (project.tags.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(project.tags) { tag ->
-                        TagChip(tag = tag)
-                    }
+                Spacer(Modifier.height(10.dp))
+                LazyRow {
+                    items(project.tags) { TagChip(it) }
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            AssigneesRow(assignees = project.assignees)
+            Spacer(Modifier.height(10.dp))
+            AssigneesRow(project.assignees)
         }
     }
 }
 
 @Composable
-private fun PriorityBadge(priority: ProjectPriority) {
-    val (color, containerColor) = when (priority) {
-        ProjectPriority.LOW -> Color.Green to Color.Green.copy(alpha = 0.1f)
-        ProjectPriority.MEDIUM -> Color(0xFFFF9800) to Color(0xFFFF9800).copy(alpha = 0.1f)
-        ProjectPriority.HIGH -> Color.Red to Color.Red.copy(alpha = 0.1f)
-    }
+fun PriorityBadge(priority: ProjectPriority) {
+    val (color, bg) =
+        when (priority) {
+            ProjectPriority.LOW -> Color(0xFF4CAF50) to Color(0x334CAF50)
+            ProjectPriority.MEDIUM -> Color(0xFFFF9800) to Color(0x33FF9800)
+            ProjectPriority.HIGH -> Color(0xFFF44336) to Color(0x33F44336)
+        }
 
-    Surface(
-        color = containerColor,
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Text(
-            text = priority.displayName,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            fontWeight = FontWeight.Medium
-        )
+    Surface(color = bg, shape = RoundedCornerShape(14.dp)) {
+        Text(priority.displayName, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = color)
     }
 }
 
 @Composable
-private fun TagChip(tag: String) {
+fun TagChip(tag: String) {
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(16.dp)
+        shape = RoundedCornerShape(10.dp)
     ) {
-        Text(
-            text = tag,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSecondaryContainer
-        )
+        Text(tag, Modifier.padding(6.dp))
     }
 }
 
 @Composable
-private fun AssigneesRow(assignees: List<ProjectAssigneeResponse>) {
+fun AssigneesRow(assignees: List<ProjectAssigneeResponse>) {
+
+    val avatarSize = 34.dp
+    val overlapOffset = (-12).dp
+
     Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy((-8).dp)
+        modifier = Modifier.height(avatarSize),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        val displayAssignees = assignees.take(3)
-        val remainingCount = assignees.size - displayAssignees.size
 
-        displayAssignees.forEach { assignee ->
-            AssigneeAvatar(assignee = assignee)
-        }
+        assignees.take(4).forEachIndexed { index, assignee ->
 
-        if (remainingCount > 0) {
-            Surface(
-                modifier = Modifier.size(32.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary
+            Box(
+                modifier = Modifier
+                    .offset(x = overlapOffset * index)
+                    .size(avatarSize)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(2.dp, Color.White, CircleShape)
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = "+$remainingCount",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold
+
+                if (!assignee.profileImageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = Constants.BASE_URL + assignee.profileImageUrl.removePrefix("/"),
+                        contentDescription = assignee.name,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(avatarSize)
+                            .clip(CircleShape)
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Person,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier
+                            .size(20.dp)
+                            .align(Alignment.Center)
                     )
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun AssigneeAvatar(assignee: ProjectAssigneeResponse) {
-    Box(
-        modifier = Modifier
-            .size(32.dp)
-            .background(
-                MaterialTheme.colorScheme.surfaceVariant,
-                CircleShape
-            )
-    ) {
-        if (!assignee.profileImageUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = "${Constants.BASE_URL}${assignee.profileImageUrl.removePrefix("/")}",
-                contentDescription = assignee.name,
+        val remaining = assignees.size - 4
+        if (remaining > 0) {
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.ic_person),
-                error = painterResource(R.drawable.ic_person)
-            )
-        } else {
-            Icon(
-                Icons.Default.Person,
-                contentDescription = assignee.name,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(6.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+                    .offset(x = overlapOffset * 4)
+                    .size(avatarSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    "+$remaining",
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun EmptyProjectsView(
-    modifier: Modifier = Modifier,
-    onCreateProject: () -> Unit
-) {
+fun EmptyProjectsView(onCreate: () -> Unit) {
     Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
+        Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_project),
-            contentDescription = null,
-            modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = "No Projects Yet",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = "Create your first project to get started",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onCreateProject) {
-            Icon(Icons.Default.Add, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
+        Icon(painterResource(R.drawable.ic_project), null, Modifier.size(80.dp))
+
+        Spacer(Modifier.height(12.dp))
+        Text("No Projects Yet")
+        Text("Create your first project to get started")
+        Spacer(Modifier.height(18.dp))
+
+        Button(onClick = onCreate) {
+            Icon(Icons.Default.Add, null)
+            Spacer(Modifier.width(8.dp))
             Text("Create Project")
         }
     }
 }
 
-private fun formatDate(dateString: String): String {
+fun formatDate(s: String): String {
     return try {
-        val date = if (dateString.contains("T")) {
-            // ISO datetime format like "2025-09-01T00:00:00"
-            val dateTime = LocalDateTime.parse(dateString)
-            dateTime.toLocalDate()
-        } else {
-            // Date-only format like "2025-09-01"
-            LocalDate.parse(dateString)
-        }
-        date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
+        val d = if (s.contains("T"))
+            java.time.LocalDateTime.parse(s).toLocalDate()
+        else
+            LocalDate.parse(s)
+
+        d.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
     } catch (e: Exception) {
-        // Fallback: try to extract just the date part
-        try {
-            val datePart = dateString.substring(0, 10)
-            val date = LocalDate.parse(datePart)
-            date.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
-        } catch (e2: Exception) {
-            dateString // Return original if all parsing fails
-        }
+        s
     }
 }
