@@ -1,0 +1,105 @@
+# 🚀 Subspace – Collaborative Project Management App
+
+**Subspace** is a modern Android application designed to help teams collaborate efficiently through real-time task management and intelligent analytics.  
+Built fully from scratch using cutting-edge Android technologies, Subspace delivers a smooth, scalable, and intuitive workflow for individuals and teams.
+
+---
+
+## 🔐 Security
+
+| Feature | Description |
+|--------|-------------|
+| **JWT Authentication** | Secure token–based login & session validation |
+| **Session Handling** | Ensures users stay authenticated safely |
+| **Password Hashing** | All passwords encrypted before storage |
+| **Protected API Routes** | Only authorized users can access sensitive endpoints |
+
+
+
+## 🔥 ✨ Key Features
+
+### ✅ **Team Collaboration**
+- Connect with teammates and build your workspace  
+- Send & manage connection requests  
+
+### ✅ **Project Management**
+- Create priority-based projects (Low / Medium / High)  
+- Assign multiple members  
+- Add descriptions, tags, and deadlines  
+
+### ✅ **Task Management**
+- Create detailed tasks with start/end dates  
+- Track lifecycle → `TODO → IN_PROGRESS → COMPLETED`  
+- Add attachments
+
+### ✅ **Polls & Decision Making**
+- Create project-wide polls  
+- Support for single/multiple selections  
+- Live vote tracking  
+
+### ✅ **Performance Analytics**
+Visual dashboards using **VICO Chart** for:
+- Task completion rate  
+- Member-specific performance  
+- Productivity over time  
+- Workload distribution  
+
+### ✅ **User Profiles**
+- Avatar, bio, job title, company  
+- Editable profile section  
+
+---
+
+
+## 📸 Screenshots
+
+<img width="383" height="822" alt="Screenshot 2025-11-30 225022" src="https://github.com/user-attachments/assets/31a35c09-98dd-4e9b-821a-783f8dace1b4" />
+<img width="371" height="823" alt="Screenshot 2025-11-30 225054" src="https://github.com/user-attachments/assets/248fa265-a59d-4d9e-a4f4-5e5300dac11b" />
+<img width="384" height="802" alt="Screenshot 2025-09-15 221008" src="https://github.com/user-attachments/assets/ed8a692d-b5e6-4c59-a8eb-e797cb4878a8" />
+<img width="369" height="823" alt="Screenshot 2025-11-30 225251" src="https://github.com/user-attachments/assets/bf0f83d1-d6cf-4428-b59d-91a979509023" />
+<img width="396" height="831" alt="Screenshot 2025-11-20 004811" src="https://github.com/user-attachments/assets/ec721793-012b-4f9b-be52-9ced427f3548" />
+<img width="363" height="741" alt="Screenshot 2025-09-11 211026" src="https://github.com/user-attachments/assets/da1f3d14-bdd1-46aa-811a-b71ba267d190" />
+
+---
+
+## 🛠 Tech Stack
+
+### **Android**
+- Kotlin  
+- Jetpack Compose  
+- ViewModel + StateFlow  
+- Dagger/Hilt  
+- Coroutines  
+- Retrofit  
+- Coil  
+- DataStore  
+
+### **Backend**
+- Ktor Framework  
+- JWT Authentication  
+- SQL / MySQL Database  
+- Exposed ORM  
+
+### **Charts & Visualization**
+- VICO CHARTS  
+
+---
+
+## 📦 Libraries Used
+
+| Purpose | Library |
+|--------|---------|
+| UI | Jetpack Compose, Material3 |
+| Networking | Retrofit |
+| Dependency Injection | Hilt |
+| Image Loading | Coil |
+| Local Storage | DataStore |
+| Charts | VICO CHARTS |
+| Backend | Ktor |
+| ORM | Exposed ORM |
+| Authentication | JWT |
+
+---
+
+
+
