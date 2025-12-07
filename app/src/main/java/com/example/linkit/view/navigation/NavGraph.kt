@@ -45,7 +45,9 @@ sealed class Screen(val route: String) {
     object CreatePoll : Screen("create_poll/{projectId}") {
         fun createRoute(projectId: Long) = "create_poll/$projectId"
     }
-
+    object Analytics : Screen("analytics/{projectId}") {
+        fun createRoute(projectId: Long) = "analytics/$projectId"
+    }
 }
 
 @Composable
@@ -57,7 +59,6 @@ fun NavGraph(
     val projectViewModel: ProjectViewModel = hiltViewModel()
     val pollViewModel: PollViewModel = hiltViewModel()
 
-    // This listener only handles background/logic-driven navigation
     LaunchedEffect(Unit) {
         merge(authViewModel.uiEvent, pollViewModel.uiEvent).collectLatest { event ->
             when (event) {
@@ -70,6 +71,7 @@ fun NavGraph(
             }
         }
     }
+
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
         composable(Screen.Splash.route) { SplashScreen(viewModel = authViewModel) }
         composable(Screen.GetStarted.route) { GetStartedScreen(onGetStarted = { authViewModel.onGetStarted() }) }
@@ -83,10 +85,10 @@ fun NavGraph(
         }
         composable(Screen.Main.route) {
             MainScreen(
-
                 onNavigateToCreateProject = { navController.navigate(Screen.CreateProject.route) },
                 onNavigateToTaskScreen = { projectId -> navController.navigate(Screen.TaskScreen.createRoute(projectId)) },
-                onNavigateToEditProject = { projectId -> navController.navigate(Screen.EditProject.createRoute(projectId)) }
+                onNavigateToEditProject = { projectId -> navController.navigate(Screen.EditProject.createRoute(projectId)) },
+                onNavigateToAnalytics = { projectId -> navController.navigate(Screen.Analytics.createRoute(projectId)) }
             )
         }
         composable(Screen.Profile.route) {
@@ -109,7 +111,7 @@ fun NavGraph(
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })
         ) { backStackEntry ->
             val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
-            val lifecycleOwner = LocalLifecycleOwner.current
+            val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_RESUME) {
@@ -147,7 +149,6 @@ fun NavGraph(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
-
         composable(
             route = Screen.CreatePoll.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })
@@ -158,5 +159,41 @@ fun NavGraph(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
+
+//        composable(
+//            route = Screen.Analytics.route,
+//            arguments = listOf(navArgument("projectId") { type = NavType.LongType })
+//        ) { backStackEntry ->
+//
+//            val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+//            val projectVM: ProjectViewModel = hiltViewModel()
+//
+//            LaunchedEffect(projectId) {
+//                projectVM.loadProjectAnalytics(projectId)
+//            }
+//
+//            AnalyticsScreen(
+//                projectId = projectId,
+//                viewModel = projectVM,
+//                onBack = { navController.popBackStack() }
+//            )
+//        }
+
+
+        // ... inside NavGraph ...
+
+        composable(
+            route = Screen.Analytics.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType })
+        ) { backStackEntry ->
+
+            val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+
+            AnalyticsScreen(
+                projectId = projectId,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
     }
 }

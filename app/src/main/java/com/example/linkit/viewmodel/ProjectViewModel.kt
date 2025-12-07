@@ -13,6 +13,7 @@ import com.example.linkit.util.UiEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -38,7 +39,12 @@ data class ProjectUiState(
     val selectedDate: LocalDate? = null,
     val selectedFilter: ProjectFilter = ProjectFilter.ALL,
     val daysWithProjectsInMonth: Set<Int> = emptySet(),
-    val currentMonth: YearMonth = YearMonth.now()
+    val currentMonth: YearMonth = YearMonth.now(),
+    val analyticsSummary: ProjectSummaryResponse? = null,
+    val analyticsWorkload: List<AssigneeWorkloadResponse> = emptyList(),
+    val analyticsProductivity: List<TimeSeriesPointResponse> = emptyList(),
+    val analyticsAssigneeStats: List<AssigneeStatsResponse> = emptyList()
+
 )
 
 enum class ProjectFilter {
@@ -97,11 +103,6 @@ class ProjectViewModel @Inject constructor(
 
     private val _editingProjectId = MutableStateFlow<Long?>(null)
 
-    init {
-        loadLoggedInUser()
-        loadProjects()
-        loadProjectsForMonth(uiState.value.currentMonth)
-    }
 
     private fun loadLoggedInUser() {
         viewModelScope.launch {
@@ -708,7 +709,5 @@ class ProjectViewModel @Inject constructor(
             }
         }
     }
-
-
 
 }

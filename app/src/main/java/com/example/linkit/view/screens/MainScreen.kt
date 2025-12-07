@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.linkit.view.navigation.Screen
 import com.example.linkit.viewmodel.ProfileViewModel
 import com.example.linkit.viewmodel.ProjectViewModel
 
@@ -36,10 +37,11 @@ fun MainScreen(
     onNavigateToCreateProject: () -> Unit,
     onNavigateToTaskScreen: (Long) -> Unit,
     onNavigateToEditProject: (Long) -> Unit,
+    onNavigateToAnalytics: (Long) -> Unit,
     profileViewModel: ProfileViewModel = hiltViewModel(),
     projectViewModel: ProjectViewModel = hiltViewModel()
 ) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableStateOf(0) }
     val bottomNavItems = listOf(BottomNavItem.Dashboard, BottomNavItem.Profile)
 
     Scaffold(
@@ -84,7 +86,8 @@ fun MainScreen(
                     viewModel = projectViewModel,
                     onNavigateToCreateProject = onNavigateToCreateProject,
                     onNavigateToTaskScreen = onNavigateToTaskScreen,
-                    onNavigateToEditProject = onNavigateToEditProject
+                    onNavigateToEditProject = onNavigateToEditProject,
+                    onNavigateToAnalytics = onNavigateToAnalytics
                 )
                 1 -> ProfileScreen(
                     viewModel = profileViewModel,

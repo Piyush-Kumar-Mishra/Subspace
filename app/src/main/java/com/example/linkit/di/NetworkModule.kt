@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.example.linkit.data.TokenStore
+import com.example.linkit.data.api.AnalyticsApiService
 import com.example.linkit.data.api.ApiService
 import com.example.linkit.data.api.ProjectApiService
 import com.example.linkit.data.local.LinkItDatabase
 import com.example.linkit.data.local.dao.ConnectionDao
 import com.example.linkit.data.local.dao.UserDao
+import com.example.linkit.data.repo.AnalyticsRepository
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ImageRepository
 import com.example.linkit.data.repo.PollRepository
@@ -180,6 +182,22 @@ object NetworkModule {
         networkUtils: NetworkUtils
     ): PollRepository {
         return PollRepository(projectApiService, tokenStore, networkUtils)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAnalyticsApiService(retrofit: Retrofit): AnalyticsApiService {
+        return retrofit.create(AnalyticsApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideAnalyticsRepository(
+        api: AnalyticsApiService,
+        tokenStore: TokenStore,
+        networkUtils: NetworkUtils
+    ): AnalyticsRepository {
+        return AnalyticsRepository(api, tokenStore, networkUtils)
     }
 
 }
