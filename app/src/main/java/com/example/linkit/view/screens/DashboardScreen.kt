@@ -13,8 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -51,7 +51,8 @@ fun DashboardScreen(
     viewModel: ProjectViewModel = hiltViewModel(),
     onNavigateToCreateProject: () -> Unit,
     onNavigateToTaskScreen: (Long) -> Unit,
-    onNavigateToEditProject: (Long) -> Unit
+    onNavigateToEditProject: (Long) -> Unit,
+    onNavigateToAnalytics: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHost = remember { SnackbarHostState() }
@@ -151,7 +152,8 @@ fun DashboardScreen(
                                 viewModel.selectProject(project)
                                 onNavigateToTaskScreen(project.id)
                             },
-                            onEdit = { onNavigateToEditProject(project.id) }
+                            onEdit = { onNavigateToEditProject(project.id) },
+                            onAnalytics = { projectId -> onNavigateToAnalytics(projectId) }
                         )
                     }
                 }
@@ -373,7 +375,8 @@ fun FilterChipsRow(
 fun ProjectCardItem(
     project: ProjectResponse,
     onClick: () -> Unit,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onAnalytics: (Long) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -408,11 +411,36 @@ fun ProjectCardItem(
                         )
                     }
                 }
-
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     PriorityBadge(ProjectPriority.valueOf(project.priority))
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, null)
+                    Spacer(Modifier.width(8.dp))
+
+                    var showMenu by remember { mutableStateOf(false) }
+
+                    // Fix: Add wrapContentSize to ensure proper anchoring for DropdownMenu
+                    Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Edit") },
+                                onClick = {
+                                    onEdit() // Trigger action first
+                                    showMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Analytics") },
+                                onClick = {
+                                    onAnalytics(project.id) // Trigger action first
+                                    showMenu = false
+                                }
+                            )
+                        }
                     }
                 }
             }
