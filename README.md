@@ -57,8 +57,11 @@ Visual dashboards using **VICO Chart** for:
 <img width="371" height="823" alt="Screenshot 2025-11-30 225054" src="https://github.com/user-attachments/assets/248fa265-a59d-4d9e-a4f4-5e5300dac11b" />
 <img width="384" height="802" alt="Screenshot 2025-09-15 221008" src="https://github.com/user-attachments/assets/ed8a692d-b5e6-4c59-a8eb-e797cb4878a8" />
 <img width="369" height="823" alt="Screenshot 2025-11-30 225251" src="https://github.com/user-attachments/assets/bf0f83d1-d6cf-4428-b59d-91a979509023" />
-<img width="396" height="831" alt="Screenshot 2025-11-20 004811" src="https://github.com/user-attachments/assets/ec721793-012b-4f9b-be52-9ced427f3548" />
-<img width="363" height="741" alt="Screenshot 2025-09-11 211026" src="https://github.com/user-attachments/assets/da1f3d14-bdd1-46aa-811a-b71ba267d190" />
+
+<img width="376" height="809" alt="Screenshot 2025-12-07 014240" src="https://github.com/user-attachments/assets/cbf50b90-2dc6-48fd-945c-aad2e5a4fd52" />
+<img width="371" height="804" alt="Screenshot 2025-12-07 013954" src="https://github.com/user-attachments/assets/9e446b71-b229-46d7-a10a-4d390303d4c1" />
+<img width="376" height="827" alt="Screenshot 2025-12-07 014003" src="https://github.com/user-attachments/assets/6527199c-9850-4213-9ba6-dc8266a38b8b" />
+<img width="380" height="815" alt="Screenshot 2025-12-07 014011" src="https://github.com/user-attachments/assets/055b3719-2894-40cd-b653-e60c57410411" />
 
 ---
 
