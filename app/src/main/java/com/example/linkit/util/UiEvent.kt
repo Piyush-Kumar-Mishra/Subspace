@@ -13,8 +13,6 @@ sealed class UiEvent {
     data class NavigateToTask(val taskId: Long) : UiEvent()
     data class NavigateToCreateProject(val route: String) : UiEvent()
     data class NavigateToCreateTask(val projectId: Long) : UiEvent()
-    data class NavigateToTaskChat(val taskId: Long) : UiEvent()
     data class NavigateToCreatePoll(val projectId: Long) : UiEvent()
-
-
+    data class NavigateToRoute(val route: String) : UiEvent()
 }

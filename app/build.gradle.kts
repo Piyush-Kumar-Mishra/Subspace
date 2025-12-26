@@ -123,6 +123,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     kotlin("kapt")
     alias(libs.plugins.dagger.hilt)
+    alias(libs.plugins.kotlin.serialization)
+
 }
 
 android {

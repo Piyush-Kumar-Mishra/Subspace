@@ -75,7 +75,9 @@ fun TaskScreen(
     profileViewModel: ProfileViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToCreateTask: (Long) -> Unit,
-    onNavigateToCreatePoll: (Long) -> Unit
+    onNavigateToCreatePoll: (Long) -> Unit,
+    onNavigateToChat: (Long) -> Unit
+
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val createProjectState by viewModel.createProjectState.collectAsState()
@@ -178,7 +180,8 @@ fun TaskScreen(
                 onViewPollClicked = {
                     pollViewModel.getPoll(projectId)
                     showPollDialog = true
-                }
+                },
+                        onNavigateToChat = { onNavigateToChat(projectId) }
             )
 
             if (uiState.isLoading) {
@@ -230,6 +233,7 @@ private fun ProjectHeader(
     onAddAssignees: () -> Unit,
     onNavigateToCreatePoll: () -> Unit,
     onViewPollClicked: () -> Unit,
+    onNavigateToChat: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -253,6 +257,14 @@ private fun ProjectHeader(
                 IconButton(onClick = onNavigateBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
+
+                IconButton(onClick = onNavigateToChat) {
+                    Icon(
+                        imageVector = Icons.Default.AccountBox,
+                        contentDescription = "Open Chat"
+                    )
+                }
+
                 Text(
                     "Dashboard",
                     style = MaterialTheme.typography.titleMedium,
@@ -592,7 +604,7 @@ private fun TimelineTaskCard(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    CountIndicator(icon = Icons.AutoMirrored.Filled.ArrowBack, count = task.messageCount)
+//                    CountIndicator(icon = Icons.AutoMirrored.Filled.ArrowBack, count = task.messageCount)
                     CountIndicator(icon = Icons.Filled.Add, count = task.attachmentCount)
                     IconButton(onClick = { filePickerLauncher.launch("*/*") }, modifier = Modifier.size(24.dp)) {
                         Icon(Icons.Default.Add, contentDescription = "Add Attachment", tint = MaterialTheme.colorScheme.primary)

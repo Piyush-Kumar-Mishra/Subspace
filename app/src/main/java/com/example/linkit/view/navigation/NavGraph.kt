@@ -3,7 +3,6 @@ package com.example.linkit.view.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -13,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.linkit.ui.screens.ChatScreen
 import com.example.linkit.util.UiEvent
 import com.example.linkit.view.screens.*
 import com.example.linkit.viewmodel.AuthViewModel
@@ -47,6 +47,10 @@ sealed class Screen(val route: String) {
     }
     object Analytics : Screen("analytics/{projectId}") {
         fun createRoute(projectId: Long) = "analytics/$projectId"
+    }
+
+    object ChatScreen : Screen("chat/{projectId}") {
+        fun createRoute(projectId: Long) = "chat/$projectId"
     }
 }
 
@@ -127,7 +131,10 @@ fun NavGraph(
                 profileViewModel = profileViewModel,
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToCreateTask = { pId -> navController.navigate(Screen.CreateTask.createRoute(pId)) },
-                onNavigateToCreatePoll = { pId -> navController.navigate(Screen.CreatePoll.createRoute(pId)) }
+                onNavigateToCreatePoll = { pId -> navController.navigate(Screen.CreatePoll.createRoute(pId)) },
+                        onNavigateToChat = { pId ->
+                    navController.navigate(Screen.ChatScreen.createRoute(pId))
+                }
             )
         }
         composable(
@@ -160,27 +167,6 @@ fun NavGraph(
             )
         }
 
-//        composable(
-//            route = Screen.Analytics.route,
-//            arguments = listOf(navArgument("projectId") { type = NavType.LongType })
-//        ) { backStackEntry ->
-//
-//            val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
-//            val projectVM: ProjectViewModel = hiltViewModel()
-//
-//            LaunchedEffect(projectId) {
-//                projectVM.loadProjectAnalytics(projectId)
-//            }
-//
-//            AnalyticsScreen(
-//                projectId = projectId,
-//                viewModel = projectVM,
-//                onBack = { navController.popBackStack() }
-//            )
-//        }
-
-
-        // ... inside NavGraph ...
 
         composable(
             route = Screen.Analytics.route,
@@ -192,6 +178,17 @@ fun NavGraph(
             AnalyticsScreen(
                 projectId = projectId,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.ChatScreen.route,
+            arguments = listOf(navArgument("projectId") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
+            ChatScreen(
+                navController = navController,
+                projectId = projectId
             )
         }
 

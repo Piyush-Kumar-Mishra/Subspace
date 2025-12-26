@@ -6,12 +6,17 @@ import androidx.room.Room
 import com.example.linkit.data.TokenStore
 import com.example.linkit.data.api.AnalyticsApiService
 import com.example.linkit.data.api.ApiService
+import com.example.linkit.data.api.ChatApi
 import com.example.linkit.data.api.ProjectApiService
 import com.example.linkit.data.local.LinkItDatabase
+import com.example.linkit.data.local.dao.ChatMessageDao
 import com.example.linkit.data.local.dao.ConnectionDao
 import com.example.linkit.data.local.dao.UserDao
 import com.example.linkit.data.repo.AnalyticsRepository
 import com.example.linkit.data.repo.AuthRepository
+import com.example.linkit.data.repo.ChatRepository
+import com.example.linkit.data.repo.ChatRepositoryImpl
+import com.example.linkit.data.repo.ChatWebSocketClient
 import com.example.linkit.data.repo.ImageRepository
 import com.example.linkit.data.repo.PollRepository
 import com.example.linkit.data.repo.ProfileRepository
@@ -199,6 +204,37 @@ object NetworkModule {
     ): AnalyticsRepository {
         return AnalyticsRepository(api, tokenStore, networkUtils)
     }
+
+
+    @Provides
+    @Singleton
+    fun provideChatApi(retrofit: Retrofit): ChatApi {
+        return retrofit.create(ChatApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatMessageDao(database: LinkItDatabase): ChatMessageDao {
+        return database.chatMessageDao()
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatWebSocketClient(tokenManager: TokenStore): ChatWebSocketClient {
+        return ChatWebSocketClient(tokenManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideChatRepository(
+        chatApi: ChatApi,
+        webSocketClient: ChatWebSocketClient,
+        chatMessageDao: ChatMessageDao
+    ): ChatRepository {
+        return ChatRepositoryImpl(chatApi, webSocketClient, chatMessageDao)
+    }
+
+
 
 }
 
