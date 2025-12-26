@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 class TokenStore(private val dataStore : DataStore<Preferences>){
@@ -26,5 +27,8 @@ class TokenStore(private val dataStore : DataStore<Preferences>){
     suspend fun saveUserId(id: Long) {
         dataStore.edit { it[USER_ID_KEY] = id }
     }
+
+    suspend fun getToken(): String? = dataStore.data.map { it[TOKEN_KEY] }.first()
+
 
 }

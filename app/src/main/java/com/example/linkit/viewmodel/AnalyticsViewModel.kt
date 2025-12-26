@@ -149,8 +149,6 @@ fun loadAnalytics(projectId: Long) {
     }
 }
 
-
-
     fun onTabSelected(index: Int) {
         _uiState.update { it.copy(selectedTab = index) }
     }

@@ -82,7 +82,7 @@ data class TaskResponse(
     val status: String,
     val createdBy: Long,
     val createdAt: String,
-    val messageCount: Int = 0,
+//    val messageCount: Int = 0,
     val attachmentCount: Int = 0
 )
 

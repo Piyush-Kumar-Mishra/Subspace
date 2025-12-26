@@ -15,9 +15,6 @@ composeBom = "2024.09.00"
 hilt = "2.57"
 retrofit2KotlinxSerializationConverter = "1.0.0"
 roomKtx = "2.7.2"
-#vico = "2.2.0"
-#androidchart = "3.1.0.31"
-
 mpAndroidChart = "v3.1.0"
 vico = "2.0.0-alpha.20"
 
@@ -57,3 +54,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 dagger-hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
