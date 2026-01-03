@@ -220,8 +220,8 @@ fun UserMessageItem(
         if (!isOwnMessage) {
             if (!message.sender?.profileImageUrl.isNullOrBlank()) {
                 AuthorizedAsyncImage(
-                    imageUrl = message.sender?.profileImageUrl,
-                    contentDescription = message.sender?.name ?: "User",
+                    imageUrl = message.sender.profileImageUrl,
+                    contentDescription = message.sender.name ?: "User",
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
@@ -273,7 +273,7 @@ fun UserMessageItem(
             }
 
             Text(
-                text = message.formattedTime,
+                text = message.formattedTime.ifBlank { "--" },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp, start = if (isOwnMessage) 0.dp else 4.dp)

@@ -118,7 +118,6 @@ class ChatRepositoryImpl @Inject constructor(
             systemEventType = null,
             systemEventData = null,
             createdAt = Instant.now().toString(),
-            formattedTime = "",
             isOwnMessage = true,
             showDateHeader = false,
             dateHeader = null,
