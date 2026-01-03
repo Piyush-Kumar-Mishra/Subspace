@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.linkit.data.models.ChatMessageResponse
 import com.example.linkit.data.models.ProjectAssigneeResponse
+import com.example.linkit.util.TimeUtils
 
 @Entity(tableName = "chat_messages")
 data class ChatMessageEntity(
@@ -16,7 +17,6 @@ data class ChatMessageEntity(
     val systemEventType: String?,
     val systemEventData: String?,
     val createdAt: String,
-    val formattedTime: String,
     val isOwnMessage: Boolean = false,
     val showDateHeader: Boolean = false,
     val dateHeader: String? = null,
@@ -33,7 +33,7 @@ fun ChatMessageEntity.toChatMessageResponse(sender: ProjectAssigneeResponse? = n
         systemEventType = systemEventType,
         systemEventData = systemEventData,
         createdAt = createdAt,
-        formattedTime = formattedTime,
+        formattedTime = TimeUtils.formatTime(createdAt),
         isOwnMessage = isOwnMessage,
         showDateHeader = showDateHeader,
         dateHeader = dateHeader
@@ -50,7 +50,6 @@ fun ChatMessageResponse.toChatMessageEntity(): ChatMessageEntity {
         systemEventType = systemEventType,
         systemEventData = systemEventData,
         createdAt = createdAt,
-        formattedTime = formattedTime,
         isOwnMessage = isOwnMessage,
         showDateHeader = showDateHeader,
         dateHeader = dateHeader,

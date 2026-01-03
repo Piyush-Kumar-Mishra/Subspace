@@ -1,5 +1,6 @@
 package com.example.linkit.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.linkit.data.models.ChatMessageResponse
@@ -7,6 +8,7 @@ import com.example.linkit.data.models.ChatUiState
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ChatRepository
 import com.example.linkit.util.NetworkResult
+import com.example.linkit.util.TimeUtils
 import com.example.linkit.util.UiEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -19,9 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -96,41 +96,72 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun processMessagesWithOwnStatus(messages: List<ChatMessageResponse>): List<ChatMessageResponse> {
-        val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
-        val today = Date()
-        val yesterday = Date(today.time - 24 * 60 * 60 * 1000)
+//    private fun processMessagesWithOwnStatus(messages: List<ChatMessageResponse>): List<ChatMessageResponse> {
+//        val dateFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+//        val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
+//        val today = Date()
+//        val yesterday = Date(today.time - 24 * 60 * 60 * 1000)
+//
+//        var previousDate: String? = null
+//
+//        return messages.map { message ->
+//            val messageDate = try {
+//                val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
+//                isoFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
+//                isoFormat.parse(message.createdAt) ?: Date()
+//            } catch (e: Exception) {
+//                Date()
+//            }
+//
+//            val dateStr = dateFormatter.format(messageDate)
+//            val showDateHeader = dateStr != previousDate
+//            previousDate = dateStr
+//
+//            val dateHeader = when (dateStr) {
+//                dateFormatter.format(today) -> "Today"
+//                dateFormatter.format(yesterday) -> "Yesterday"
+//                else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(messageDate)
+//            }
+//
+//            message.copy(
+//                isOwnMessage = message.sender?.userId == currentUserId,
+//                showDateHeader = showDateHeader,
+//                dateHeader = if (showDateHeader) dateHeader else null,
+//                formattedTime = timeFormatter.format(messageDate)
+//            )
+//        }
+//    }
+
+    private fun processMessagesWithOwnStatus(
+        messages: List<ChatMessageResponse>
+    ): List<ChatMessageResponse> {
+
 
         var previousDate: String? = null
 
         return messages.map { message ->
-            val messageDate = try {
-                val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.getDefault())
-                isoFormat.timeZone = java.util.TimeZone.getTimeZone("UTC")
-                isoFormat.parse(message.createdAt) ?: Date()
-            } catch (e: Exception) {
-                Date()
-            }
+            val dateHeader = TimeUtils.formatDateHeader(message.createdAt)
+            val showDateHeader = dateHeader != previousDate
+            previousDate = dateHeader
 
-            val dateStr = dateFormatter.format(messageDate)
-            val showDateHeader = dateStr != previousDate
-            previousDate = dateStr
-
-            val dateHeader = when (dateStr) {
-                dateFormatter.format(today) -> "Today"
-                dateFormatter.format(yesterday) -> "Yesterday"
-                else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(messageDate)
-            }
+            Timber.tag("TIME_DEBUG").d(
+                "id=${message.id}, createdAt=${message.createdAt}, formatted=${
+                    TimeUtils.formatTime(message.createdAt)
+                }"
+            )
 
             message.copy(
                 isOwnMessage = message.sender?.userId == currentUserId,
                 showDateHeader = showDateHeader,
                 dateHeader = if (showDateHeader) dateHeader else null,
-                formattedTime = timeFormatter.format(messageDate)
+                formattedTime = TimeUtils.formatTime(message.createdAt)
             )
+
+
         }
     }
+
+
 
     fun loadMoreMessages() {
         val lastMessageTime = _uiState.value.messages.lastOrNull()?.createdAt
@@ -266,34 +297,15 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun handleIncomingMessage(message: ChatMessageResponse) {
-        val messageWithOwnStatus = message.copy(
-            isOwnMessage = message.sender?.userId == currentUserId
+        val updated = message.copy(
+            isOwnMessage = message.sender?.userId == currentUserId,
+            formattedTime = TimeUtils.formatTime(message.createdAt)
         )
 
         _uiState.update { state ->
-            val exists = state.messages.any { it.id == message.id }
-            if (!exists) {
-                val processedMessage = processSingleMessage(messageWithOwnStatus)
-                val updatedMessages = (state.messages + processedMessage)
-                    .sortedBy { it.createdAt }
-                state.copy(messages = updatedMessages)
-            } else {
-                state
-            }
+            if (state.messages.any { it.id == updated.id }) state
+            else state.copy(messages = (state.messages + updated).sortedBy { it.createdAt })
         }
-    }
-
-    private fun processSingleMessage(message: ChatMessageResponse): ChatMessageResponse {
-        val timeFormatter = SimpleDateFormat("hh:mm a", Locale.getDefault())
-        val messageDate = try {
-            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).parse(message.createdAt) ?: Date()
-        } catch (e: Exception) {
-            Date()
-        }
-
-        return message.copy(
-            formattedTime = timeFormatter.format(messageDate)
-        )
     }
 
     private fun handleTypingUpdate(userId: Long, userName: String) {
