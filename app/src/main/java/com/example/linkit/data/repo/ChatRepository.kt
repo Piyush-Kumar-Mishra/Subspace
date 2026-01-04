@@ -82,7 +82,7 @@ class ChatRepositoryImpl @Inject constructor(
                 NetworkResult.Success(
                     ChatHistoryResponse(
                         messages = local.map { it.toChatMessageResponse() },
-                        hasMore = local.size >= limit,
+                        hasMore = true,
                         nextPageToken = null
                     )
                 )
