@@ -32,4 +32,9 @@ object TimeUtils {
             .atZone(ZoneId.systemDefault())
             .format(dateFormatter)
     }
+
+    fun getCurrentIsoTime(): String {
+        return Instant.now().toString()
+    }
+
 }

@@ -1,8 +1,14 @@
 package com.example.linkit.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -10,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
@@ -18,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -26,6 +32,7 @@ import androidx.navigation.NavController
 import com.example.linkit.data.models.ChatMessageResponse
 import com.example.linkit.view.components.AuthorizedAsyncImage
 import com.example.linkit.viewmodel.ChatViewModel
+import kotlinx.coroutines.launch
 
 val ChatOwnMessageBackground = Color(0xFF007AFF)
 val ChatOtherMessageBackground = Color(0xFFE9E9EB)
@@ -60,12 +67,17 @@ fun ChatScreen(
             )
         },
         bottomBar = {
-            MessageInput(
-                messageText = uiState.inputText,
-                isSending = uiState.isSending,
-                onTextChange = viewModel::onInputTextChanged,
-                onSendClick = viewModel::sendMessage
-            )
+            Column {
+                if (uiState.typingUsers.isNotEmpty()) {
+                    TypingIndicator(typingUsers = uiState.typingUsers)
+                }
+                MessageInput(
+                    messageText = uiState.inputText,
+                    isSending = uiState.isSending,
+                    onTextChange = viewModel::onInputTextChanged,
+                    onSendClick = viewModel::sendMessage
+                )
+            }
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
@@ -82,10 +94,6 @@ fun ChatScreen(
                     isLoadingMore = uiState.isLoadingMore,
                     hasMore = uiState.hasMoreMessages
                 )
-            }
-
-            if (uiState.typingUsers.isNotEmpty()) {
-                TypingIndicator(typingUsers = uiState.typingUsers)
             }
         }
     }
@@ -140,46 +148,109 @@ fun ChatTopBar(
 @Composable
 fun MessageList(
     messages: List<ChatMessageResponse>,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyListState,
     onLoadMore: () -> Unit,
     isLoadingMore: Boolean,
     hasMore: Boolean
 ) {
-    LazyColumn(
-        state = listState,
-        reverseLayout = true,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (hasMore) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isLoadingMore) {
+    val scope = rememberCoroutineScope()
+
+    val newestMessageId = messages.firstOrNull()?.id
+    val isUserScrolling = listState.isScrollInProgress
+
+    val showScrollToBottom by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 1
+        }
+    }
+
+    //Auto-Scroll Logic
+    LaunchedEffect(newestMessageId) {
+        if (messages.isNotEmpty()) {
+            val isOwnMessage = messages.first().isOwnMessage
+            // Auto-scroll if:
+            // - I sent the message
+            // - OR I am already looking at the bottom
+            // - OR it's the very first load
+            if (isOwnMessage || !showScrollToBottom) {
+                listState.animateScrollToItem(0)
+            }
+        }
+    }
+
+    // Pagination (History) Logic
+    val totalItems = listState.layoutInfo.totalItemsCount
+    val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+
+    LaunchedEffect(lastVisibleIndex, totalItems) {
+        if (totalItems > 0 &&
+            lastVisibleIndex >= totalItems - 5 && // Load when 5 items away from top
+            hasMore &&
+            !isLoadingMore
+        ) {
+            onLoadMore()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            reverseLayout = true, // Bottom is Index 0
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 8.dp, horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+
+            items(
+                items = messages,
+                key = { it.id }
+            ) { message ->
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // 1. Date Header (Visually Top)
+                    if (message.showDateHeader) {
+                        DateHeader(message.dateHeader ?: "")
+                    }
+
+                    when (message.messageType) {
+                        "USER_MESSAGE" -> UserMessageItem(
+                            message = message,
+                            isOwnMessage = message.isOwnMessage
+                        )
+                        "SYSTEM_MESSAGE" -> SystemMessageItem(message = message)
+                        else -> SystemMessageItem(message = message)
+                    }
+                }
+            }
+
+            if (isLoadingMore) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    } else {
-                        TextButton(onClick = onLoadMore) {
-                            Text("Load older messages")
-                        }
                     }
                 }
             }
         }
 
-        items(messages.reversed()) { message ->
-            if (message.showDateHeader) {
-                DateHeader(message.dateHeader ?: "")
-            }
-
-            when (message.messageType) {
-                "USER_MESSAGE" -> UserMessageItem(message = message, isOwnMessage = message.isOwnMessage)
-                "SYSTEM_MESSAGE" -> SystemMessageItem(message = message)
-                else -> SystemMessageItem(message = message)
+        // Floating "New Messages" Button
+        AnimatedVisibility(
+            visible = showScrollToBottom,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 16.dp)
+        ) {
+            FloatingActionButton(
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shape = CircleShape,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll Down")
             }
         }
     }
@@ -194,14 +265,14 @@ fun DateHeader(dateText: String) {
         contentAlignment = Alignment.Center
     ) {
         Card(
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = ChatSystemMessageBackground),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Text(
                 text = dateText,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.Gray,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
         }
@@ -209,33 +280,25 @@ fun DateHeader(dateText: String) {
 }
 
 @Composable
-fun UserMessageItem(
-    message: ChatMessageResponse,
-    isOwnMessage: Boolean
-) {
+fun UserMessageItem(message: ChatMessageResponse, isOwnMessage: Boolean) {
     Row(
         horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start,
         modifier = Modifier.fillMaxWidth()
     ) {
         if (!isOwnMessage) {
+            // Profile Icon Logic
             if (!message.sender?.profileImageUrl.isNullOrBlank()) {
                 AuthorizedAsyncImage(
                     imageUrl = message.sender.profileImageUrl,
                     contentDescription = message.sender.name ?: "User",
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .align(Alignment.Top)
+                    modifier = Modifier.size(32.dp).clip(CircleShape).align(Alignment.Bottom)
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Person,
-                    contentDescription = message.sender?.name ?: "User",
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .align(Alignment.Top),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.LightGray).padding(4.dp),
+                    tint = Color.White
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -246,22 +309,21 @@ fun UserMessageItem(
                 Text(
                     text = message.sender.name,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 2.dp)
+                    color = Color.Gray,
+                    modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
                 )
             }
 
             Card(
                 shape = RoundedCornerShape(
-                    topStart = 12.dp,
-                    topEnd = 12.dp,
-                    bottomStart = if (isOwnMessage) 12.dp else 4.dp,
-                    bottomEnd = if (isOwnMessage) 4.dp else 12.dp
+                    topStart = 18.dp,
+                    topEnd = 18.dp,
+                    bottomStart = if (isOwnMessage) 18.dp else 4.dp,
+                    bottomEnd = if (isOwnMessage) 4.dp else 18.dp
                 ),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isOwnMessage) ChatOwnMessageBackground else ChatOtherMessageBackground
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                )
             ) {
                 Text(
                     text = message.content,
@@ -273,10 +335,10 @@ fun UserMessageItem(
             }
 
             Text(
-                text = message.formattedTime.ifBlank { "--" },
+                text = message.formattedTime,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp, start = if (isOwnMessage) 0.dp else 4.dp)
+                color = Color.LightGray,
+                modifier = Modifier.padding(top = 2.dp, end = 4.dp)
             )
         }
     }
@@ -285,25 +347,14 @@ fun UserMessageItem(
 @Composable
 fun SystemMessageItem(message: ChatMessageResponse) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
-        Card(
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = ChatSystemMessageBackground),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Text(
-                text = message.content,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-            )
-        }
+        Text(
+            text = message.content,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.Gray
+        )
     }
 }
 
@@ -317,55 +368,28 @@ fun MessageInput(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .background(MaterialTheme.colorScheme.surface, MaterialTheme.shapes.medium),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         OutlinedTextField(
             value = messageText,
             onValueChange = onTextChange,
-            modifier = Modifier
-                .weight(1f)
-                .heightIn(min = 56.dp, max = 120.dp),
+            modifier = Modifier.weight(1f),
             placeholder = { Text("Type a message...") },
             shape = RoundedCornerShape(24.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent
-            ),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             maxLines = 4
         )
-
-        IconButton(
+        Spacer(modifier = Modifier.width(8.dp))
+        FloatingActionButton(
             onClick = onSendClick,
-            enabled = messageText.trim().isNotEmpty() && !isSending,
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(
-                    if (messageText.trim().isNotEmpty() && !isSending)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant
-                )
+            containerColor = MaterialTheme.colorScheme.primary,
+            shape = CircleShape,
+            modifier = Modifier.size(50.dp)
         ) {
             if (isSending) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary
-                )
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
             } else {
-                Icon(
-                    Icons.Default.Send,
-                    contentDescription = "Send",
-                    tint = if (messageText.trim().isNotEmpty())
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
             }
         }
     }
