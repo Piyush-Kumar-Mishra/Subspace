@@ -12,6 +12,7 @@ import com.example.linkit.util.NetworkResult
 import com.example.linkit.util.UiEvent
 import com.example.linkit.view.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,6 +91,7 @@ class ProjectViewModel @Inject constructor(
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
+
     private val _uiState = MutableStateFlow(ProjectUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -103,6 +105,10 @@ class ProjectViewModel @Inject constructor(
     val uiEvent = _uiEvent.asSharedFlow()
 
     private val _editingProjectId = MutableStateFlow<Long?>(null)
+
+    init {
+        loadProjectsForMonth(YearMonth.now())
+    }
 
 
     private fun loadLoggedInUser() {
@@ -137,16 +143,9 @@ class ProjectViewModel @Inject constructor(
                         _uiState.update { it.copy(isLoading = true) }
 
                     is NetworkResult.Success -> {
-                        val filtered = state.selectedDate?.let { selected ->
-                            result.data.filter { project ->
-                                runCatching {
-                                    LocalDate.parse(project.startDate.take(10)) == selected
-                                }.getOrDefault(false)
-                            }
-                        } ?: result.data
-
                         _uiState.update {
-                            it.copy(isLoading = false, projects = filtered)
+                            it.copy(isLoading = false, projects = result.data
+                            )
                         }
                     }
 
@@ -160,29 +159,37 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun loadProjectsForMonth(month: YearMonth) {
+
+        _uiState.update {
+            it.copy(
+                currentMonth = month,
+                daysWithProjectsInMonth = emptySet() // clear old dots
+            )
+        }
+
         val from = month.atDay(1).format(DateTimeFormatter.ISO_DATE)
         val to = month.atEndOfMonth().format(DateTimeFormatter.ISO_DATE)
 
         viewModelScope.launch {
-            projectRepository.getProjectsFiltered(startDateFrom = from, startDateTo = to)
-                .collect { result ->
-                    if (result is NetworkResult.Success) {
-                        val days = result.data.mapNotNull { proj ->
-                            runCatching {
-                                LocalDate.parse(proj.startDate.substring(0, 10)).dayOfMonth
-                            }.getOrNull()
-                        }.toSet()
+            projectRepository.getProjectsFiltered(
+                startDateFrom = from,
+                startDateTo = to
+            ).collect { result ->
+                if (result is NetworkResult.Success) {
+                    val days = result.data.mapNotNull { proj ->
+                        runCatching {
+                            LocalDate.parse(proj.startDate).dayOfMonth
+                        }.getOrNull()
+                    }.toSet()
 
-                        _uiState.update {
-                            it.copy(
-                                daysWithProjectsInMonth = days,
-                                currentMonth = month
-                            )
-                        }
+                    _uiState.update {
+                        it.copy(daysWithProjectsInMonth = days)
                     }
                 }
+            }
         }
     }
+
     fun clearSelectedDate() {
         _uiState.update { it.copy(selectedDate = null) }
     }
@@ -228,6 +235,7 @@ class ProjectViewModel @Inject constructor(
         val newMonth = uiState.value.currentMonth.plusMonths(1)
         loadProjectsForMonth(newMonth)
     }
+
     fun selectProject(project: ProjectResponse) {
         _uiState.value = _uiState.value.copy(currentProject = project)
     }
@@ -671,6 +679,7 @@ class ProjectViewModel @Inject constructor(
                         _uiEvent.emit(event)
 
                         loadProjectById(projectId)
+                        loadProjectsForMonth(uiState.value.currentMonth)
                         if (_createProjectState.value.showAssigneeDialog) {
                             toggleAssigneeDialog()
                         } else {
