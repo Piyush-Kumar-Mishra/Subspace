@@ -186,7 +186,7 @@ class ChatViewModel @Inject constructor(
         _uiState.update { state ->
             val updatedList = (state.messages + tempMessage)
             state.copy(
-                messages = processMessagesForReverseLayout(updatedList), // Re-sorts putting temp at Index 0
+                messages = processMessagesForReverseLayout(updatedList),
                 isSending = true,
                 inputText = "",
                 typingUsers = emptyMap()

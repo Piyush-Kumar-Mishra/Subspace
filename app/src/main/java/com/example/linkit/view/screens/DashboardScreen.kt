@@ -36,6 +36,7 @@ import com.example.linkit.data.models.ProjectAssigneeResponse
 import com.example.linkit.data.models.ProjectPriority
 import com.example.linkit.data.models.ProjectResponse
 import com.example.linkit.util.Constants
+import com.example.linkit.util.TimeUtils
 import com.example.linkit.util.UiEvent
 import com.example.linkit.viewmodel.ProjectFilter
 import com.example.linkit.viewmodel.ProjectViewModel
@@ -453,7 +454,7 @@ fun ProjectCardItem(
             ) {
                 Column {
                     Text("Start Date", style = MaterialTheme.typography.labelSmall)
-                    Text(formatDate(project.startDate))
+                    Text(TimeUtils.formatProjectDate(project.startDate))
                 }
 
                 Text("${project.taskCount} tasks")
@@ -578,18 +579,5 @@ fun EmptyProjectsView(onCreate: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             Text("Create Project")
         }
-    }
-}
-
-fun formatDate(s: String): String {
-    return try {
-        val d = if (s.contains("T"))
-            java.time.LocalDateTime.parse(s).toLocalDate()
-        else
-            LocalDate.parse(s)
-
-        d.format(DateTimeFormatter.ofPattern("MMM dd, yyyy"))
-    } catch (e: Exception) {
-        s
     }
 }
