@@ -1,6 +1,7 @@
 package com.example.linkit.util
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -36,5 +37,15 @@ object TimeUtils {
     fun getCurrentIsoTime(): String {
         return Instant.now().toString()
     }
+
+    fun formatProjectDate(date: String?): String {
+        return try {
+            LocalDate.parse(date?.take(10))
+                .format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
 
 }

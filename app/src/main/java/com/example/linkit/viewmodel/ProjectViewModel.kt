@@ -136,8 +136,19 @@ class ProjectViewModel @Inject constructor(
                     is NetworkResult.Loading ->
                         _uiState.update { it.copy(isLoading = true) }
 
-                    is NetworkResult.Success ->
-                        _uiState.update { it.copy(isLoading = false, projects = result.data) }
+                    is NetworkResult.Success -> {
+                        val filtered = state.selectedDate?.let { selected ->
+                            result.data.filter { project ->
+                                runCatching {
+                                    LocalDate.parse(project.startDate.take(10)) == selected
+                                }.getOrDefault(false)
+                            }
+                        } ?: result.data
+
+                        _uiState.update {
+                            it.copy(isLoading = false, projects = filtered)
+                        }
+                    }
 
                     is NetworkResult.Error -> {
                         _uiState.update { it.copy(isLoading = false) }
@@ -640,7 +651,7 @@ class ProjectViewModel @Inject constructor(
         val request = UpdateProjectRequest(
             name = state.name.trim(),
             description = state.description.trim().takeIf { it.isNotEmpty() },
-            startDate = state.startDate.atStartOfDay(ZoneOffset.UTC).toInstant().toString(),
+            startDate = state.startDate.format(DateTimeFormatter.ISO_DATE),
             priority = state.priority.name,
             assigneeIds = state.selectedAssignees.map { it.userId },
             tags = state.tags
