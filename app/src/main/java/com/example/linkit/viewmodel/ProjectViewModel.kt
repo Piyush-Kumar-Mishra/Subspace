@@ -107,6 +107,7 @@ class ProjectViewModel @Inject constructor(
     private val _editingProjectId = MutableStateFlow<Long?>(null)
 
     init {
+        loadLoggedInUser()
         loadProjectsForMonth(YearMonth.now())
     }
 
