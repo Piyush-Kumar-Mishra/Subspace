@@ -107,6 +107,7 @@ class ProjectViewModel @Inject constructor(
     private val _editingProjectId = MutableStateFlow<Long?>(null)
 
     init {
+        loadProjects()
         loadLoggedInUser()
         loadProjectsForMonth(YearMonth.now())
     }
@@ -210,7 +211,6 @@ class ProjectViewModel @Inject constructor(
                 _uiState.update { it.copy(selectedDate = null) }
             }
         }
-
         loadProjects()
     }
 
@@ -465,9 +465,16 @@ class ProjectViewModel @Inject constructor(
                 _createProjectState.value = _createProjectState.value.copy(isLoading = false)
                 when (result) {
                     is NetworkResult.Success -> {
+                        val newProject = result.data
+
+                        _uiState.update {
+                            it.copy(
+                                projects = listOf(newProject) + it.projects
+                            )
+                        }
+
                         _uiEvent.emit(UiEvent.ShowToast("Project created successfully"))
                         clearProjectForm()
-                        loadProjects()
                         _uiEvent.emit(UiEvent.NavigateBack)
                     }
                     is NetworkResult.Error -> _uiEvent.emit(UiEvent.ShowToast(result.message))
@@ -589,11 +596,20 @@ class ProjectViewModel @Inject constructor(
                 _createTaskState.value = _createTaskState.value.copy(isLoading = false)
                 when (result) {
                     is NetworkResult.Success -> {
-                        _uiEvent.emit(UiEvent.ShowToast("Task created successfully"))
-                        clearTaskForm()
+                        _uiState.update { state ->
+                            state.copy(
+                                projects = state.projects.map {
+                                    if (it.id == projectId) it.copy(taskCount = it.taskCount + 1)
+                                    else it
+                                }
+                            )
+                        }
+
                         loadProjectTasks(projectId)
                         _uiEvent.emit(UiEvent.NavigateBack)
                     }
+
+
                     is NetworkResult.Error -> _uiEvent.emit(UiEvent.ShowToast(result.message))
                     else -> Unit
                 }
@@ -710,19 +726,24 @@ class ProjectViewModel @Inject constructor(
             projectRepository.deleteProject(projectToDelete.id).collect { result ->
                 when (result) {
                     is NetworkResult.Success -> {
-                        _uiEvent.emit(UiEvent.ShowToast("Project '${projectToDelete.name}' deleted"))
-                        _uiState.value = _uiState.value.copy(currentProject = null)
-                        loadProjects()
+                        _uiState.update {
+                            it.copy(
+                                projects = it.projects.filterNot { p -> p.id == projectToDelete.id },
+                                currentProject = null,
+                                showDeleteProjectDialog = false
+                            )
+                        }
                         _uiEvent.emit(UiEvent.NavigateBack)
                     }
-                    is NetworkResult.Error -> _uiEvent.emit(UiEvent.ShowToast(result.message))
+
+                    is NetworkResult.Error ->
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+
                     else -> Unit
                 }
             }
-            onDismissDeleteProjectDialog()
         }
     }
-
 
     private fun checkProjectPollStatus(projectId: Long) {
         viewModelScope.launch {
