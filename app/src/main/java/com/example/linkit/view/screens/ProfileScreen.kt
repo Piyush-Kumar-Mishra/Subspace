@@ -55,10 +55,16 @@ fun ProfileScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val profileState by viewModel.profileState.collectAsState()
+    val viewedProfileState by viewModel.viewedProfileState.collectAsState()
+
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
-    val bottomSheetState = rememberModalBottomSheetState()
+    val addConnectionSheetState = rememberModalBottomSheetState()
+    val viewedProfileSheetState =
+        rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
     val coroutineScope = rememberCoroutineScope()
+
     var showAddConnectionSheet by remember { mutableStateOf(false) }
     var showUpdateProfileDialog by remember { mutableStateOf(false) }
 
@@ -134,8 +140,21 @@ fun ProfileScreen(
                                 item { NoConnectionsView() }
                             } else {
                                 items(state.connections) { connection ->
-                                    ConnectionItem(connection = connection)
+                                    ConnectionItem(
+                                        connection = connection,
+                                        onClick = { userId ->
+                                            val currentUserId = (profileState as? NetworkResult.Success)
+                                                ?.data
+                                                ?.userId
+
+                                            if (currentUserId != null && userId != currentUserId) {
+                                                viewModel.viewUserProfile(userId)
+                                            }
+                                        }
+                                    )
                                 }
+
+
                             }
                         }
                         1 -> { // About
@@ -154,16 +173,43 @@ fun ProfileScreen(
             }
         }
 
+
+        if (viewedProfileState.profile != null) {
+            ModalBottomSheet(
+                onDismissRequest = { viewModel.closeUserProfileSheet() },
+                sheetState = viewedProfileSheetState
+            ) {
+                UserProfileSheetContent(
+                    state = viewedProfileState,
+                    onClose = {
+                        coroutineScope.launch {
+                            viewedProfileSheetState.hide()
+                        }.invokeOnCompletion {
+                            if (!viewedProfileSheetState.isVisible) {
+                                viewModel.closeUserProfileSheet()
+                            }
+                        }
+                    }
+                )
+            }
+        }
+
+
         if (showAddConnectionSheet) {
-            ModalBottomSheet(onDismissRequest = { showAddConnectionSheet = false }, sheetState = bottomSheetState) {
+            ModalBottomSheet(
+                onDismissRequest = { showAddConnectionSheet = false },
+                sheetState = addConnectionSheetState
+            ) {
                 AddConnectionBottomSheet(
                     searchQuery = state.searchQuery,
                     searchResults = state.searchResults,
                     onSearchQueryChanged = viewModel::searchUsers,
                     onAddConnection = { email ->
                         viewModel.addConnection(email)
-                        coroutineScope.launch { bottomSheetState.hide() }.invokeOnCompletion {
-                            if (!bottomSheetState.isVisible) {
+                        coroutineScope.launch {
+                            addConnectionSheetState.hide()
+                        }.invokeOnCompletion {
+                            if (!addConnectionSheetState.isVisible) {
                                 showAddConnectionSheet = false
                             }
                         }
@@ -334,9 +380,9 @@ private fun ProfileTabs(selectedTabIndex: Int, onTabSelected: (Int) -> Unit) {
 }
 
 @Composable
-private fun ConnectionItem(connection: ConnectionResponse) {
+private fun ConnectionItem(connection: ConnectionResponse, onClick: (Long) -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clickable { onClick(connection.userId) },
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Row(
