@@ -61,6 +61,7 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
+        viewModel.loadProjects()
         viewModel.uiEvent.collectLatest { event ->
             if (event is UiEvent.ShowToast) snackbarHost.showSnackbar(event.msg)
         }
@@ -71,14 +72,6 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = { Text("My Projects") },
-                actions = {
-                    IconButton(onClick = { viewModel.loadProjects() }) {
-                        Icon(
-                            painterResource(R.drawable.ic_refresh),
-                            contentDescription = null
-                        )
-                    }
-                }
             )
         },
         floatingActionButton = {
