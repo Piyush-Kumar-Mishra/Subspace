@@ -10,33 +10,39 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardDoubleArrowRight
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.example.linkit.R
 import com.example.linkit.data.models.ProjectAssigneeResponse
-import com.example.linkit.data.models.ProjectPriority
 import com.example.linkit.data.models.ProjectResponse
 import com.example.linkit.util.Constants
-import com.example.linkit.util.TimeUtils
 import com.example.linkit.util.UiEvent
 import com.example.linkit.viewmodel.ProjectFilter
 import com.example.linkit.viewmodel.ProjectViewModel
@@ -44,7 +50,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.format.DateTimeFormatter
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Shape
+import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,13 +79,15 @@ fun DashboardScreen(
         snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
-                title = { Text("My Projects") },
+                title = { Text("Subspace") },
             )
         },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToCreateProject,
-                shape = RoundedCornerShape(18.dp)
+                shape = RoundedCornerShape(16.dp),
+                containerColor = Color.Black.copy(alpha = 0.8f),
+                contentColor = Color.White
             ) {
                 Icon(Icons.Default.Add, null)
             }
@@ -92,12 +102,12 @@ fun DashboardScreen(
                 .background(Color.White)
         ) {
 
-        Box(
+            Box(
                 Modifier
                     .fillMaxWidth()
                     .background(Color(0xFFF4F5F7))
             ) {
-                AnimatedCalendar(
+                Calendar(
                     selectedDate = uiState.selectedDate,
                     currentMonth = uiState.currentMonth,
                     daysWithProjects = uiState.daysWithProjectsInMonth,
@@ -110,13 +120,13 @@ fun DashboardScreen(
             LazyColumn(
                 state = projectListState,
                 contentPadding = PaddingValues(bottom = 120.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
 
                 item {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        FilterChipsRow(
+                    Box(Modifier.fillMaxWidth(), Alignment.Center) {
+                        FilterChips(
                             selected = uiState.selectedFilter,
                             onSelected = {
                                 viewModel.clearSelectedDate()
@@ -140,7 +150,7 @@ fun DashboardScreen(
                     }
                 } else {
                     items(uiState.projects) { project ->
-                        ProjectCardItem(
+                        ProjectCard(
                             project = project,
                             onClick = {
                                 viewModel.selectProject(project)
@@ -180,7 +190,7 @@ fun DashboardScreen(
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
-fun AnimatedCalendar(
+fun Calendar(
     selectedDate: LocalDate?,
     currentMonth: YearMonth,
     daysWithProjects: Set<Int>,
@@ -191,38 +201,42 @@ fun AnimatedCalendar(
     val today = LocalDate.now()
     val density = LocalDensity.current
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
+
+    var hasAutoScrolled by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentMonth) {
-        if (currentMonth.month == today.month && currentMonth.year == today.year) {
-            val index = today.dayOfMonth - 1
-            scope.launch {
+        val isTodayMonth =
+            currentMonth.month == today.month &&
+                    currentMonth.year == today.year
 
-                val itemWidthPx = with(density) { 62.dp.toPx() }
+        if (isTodayMonth && !hasAutoScrolled) {
+            hasAutoScrolled = true
 
-                val centerOffset =
-                    (listState.layoutInfo.viewportSize.width / 2) - (itemWidthPx / 2)
-                listState.scrollToItem(index, -centerOffset.toInt())
-            }
+            snapshotFlow { listState.layoutInfo.viewportSize.width }
+                .first { it > 0 }
+
+            val itemWidthPx = with(density) { 62.dp.toPx() }
+            val centerOffset =
+                (listState.layoutInfo.viewportSize.width / 2) - (itemWidthPx / 2)
+
+            listState.animateScrollToItem(
+                index = today.dayOfMonth - 1,
+                scrollOffset = -centerOffset.toInt()
+            )
         }
     }
 
-    Column(
-        Modifier
-            .padding(
-                horizontal = 14.dp,
-                vertical = 14.dp
-            )
-    ) {
 
+    Column() {
         Row(
-            Modifier.fillMaxWidth(),
+            Modifier
+                .fillMaxWidth()
+                .background(Color.Black.copy(alpha = 0.8f)),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-
             IconButton(onPrev) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = null, tint = Color.White)
             }
 
             Text(
@@ -231,11 +245,12 @@ fun AnimatedCalendar(
                 } ${currentMonth.year}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = Color.White,
                 modifier = Modifier.padding(horizontal = 8.dp)
             )
 
             IconButton(onNext) {
-                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.White)
             }
         }
 
@@ -278,7 +293,7 @@ fun AnimatedCalendar(
                             color = Color.DarkGray
                         )
 
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(2.dp))
 
                         Surface(
                             modifier = Modifier
@@ -289,11 +304,11 @@ fun AnimatedCalendar(
                                 },
                             shape = CircleShape,
                             color = if (isSelected)
-                                MaterialTheme.colorScheme.primary
+                                Color.Black.copy(alpha = 0.8f)
                             else
                                 Color.Transparent,
                             border = if (isToday && !isSelected)
-                                BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
+                                BorderStroke(2.dp,Color.Black.copy(alpha = 0.8f))
                             else null
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -324,8 +339,9 @@ fun AnimatedCalendar(
     }
 }
 
+
 @Composable
-fun FilterChipsRow(
+fun FilterChips(
     selected: ProjectFilter,
     onSelected: (ProjectFilter) -> Unit
 ) {
@@ -337,7 +353,7 @@ fun FilterChipsRow(
         ProjectFilter.LOW to "Low"
     )
 
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
         items(filters) { (filter, label) ->
 
             val sel = selected == filter
@@ -348,17 +364,21 @@ fun FilterChipsRow(
                 label = {
                     Text(
                         label,
-                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
+                        color = if (sel)
+                            Color.White
+                        else
+                            Color.Black
+
                     )
                 },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(10.dp),
+
                 colors = FilterChipDefaults.filterChipColors(
-                    containerColor = if (sel)
-                        MaterialTheme.colorScheme.primary else Color.White,
-                    labelColor = if (sel)
-                        MaterialTheme.colorScheme.onPrimary
-                    else
-                        Color.Black
+                    containerColor = Color.White,
+                    labelColor = Color.Black,
+                    selectedContainerColor = Color.Black.copy(alpha = 0.8f),
+                    selectedLabelColor = Color.White
                 )
             )
         }
@@ -366,188 +386,291 @@ fun FilterChipsRow(
 }
 
 @Composable
-fun ProjectCardItem(
+fun UserAvatar(assignees: List<ProjectAssigneeResponse>) {
+    val visible = assignees.take(3)
+    Row(horizontalArrangement = Arrangement.spacedBy((-10).dp)) {
+        visible.forEach { user ->
+            AsyncImage(
+                model = Constants.BASE_URL + (user.profileImageUrl ?: ""),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(29.dp)
+                    .clip(CircleShape)
+                    .border(2.dp, Color.White, CircleShape)
+                    .background(Color.LightGray),
+                contentScale = ContentScale.Crop,
+                error = painterResource(R.drawable.ic_person)
+            )
+        }
+        if (assignees.size > 3) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1F2937))
+                    .border(2.dp, Color.White, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("+${assignees.size - 3}", style = MaterialTheme.typography.labelSmall, color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+fun ProjectCard(
     project: ProjectResponse,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onAnalytics: (Long) -> Unit
 ) {
-    Card(
+    val startDate = formatDateFromIso(project.createdAt)
+    val endDate = formatDateFromIso(project.endDate)
+    val startTime = formatTimeFromIso(project.createdAt)
+    val endTime = formatTimeFromIso(project.endDate)
+
+    val (bgColor) = when (project.priority.uppercase()) {
+        "HIGH" -> Color(0xFFFFFFFF) to Color(0xFF673AB7)
+        "MEDIUM" -> Color(0xFFFFFFFF) to Color(0xFF0288D1)
+        "LOW" -> Color(0xFFFFFFFF) to Color(0xFF388E3C)
+        else -> Color(0xFFFFE0B2) to Color(0xFFF57C00)
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp)
-            .shadow(2.dp, RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
+            .padding(horizontal = 19.dp, vertical = 10.dp)
+            .height(IntrinsicSize.Min)
     ) {
 
-        Column(Modifier.padding(14.dp)) {
+        Column(
+            modifier = Modifier
+                .width(35.dp)
+                .fillMaxHeight(),
 
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(startTime, style = MaterialTheme.typography.labelSmall, color = Color.Black, fontWeight = FontWeight.Bold)
+
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color.Gray))
+
+                Canvas(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .weight(1f)
+                ) {
+                    val pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                    drawLine(
+                        color = Color.Gray,
+                        start = Offset(center.x, 0f),
+                        end = Offset(center.x, size.height),
+                        pathEffect = pathEffect,
+                        strokeWidth = 2f
+                    )
+                }
+
+                Box(Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color.Gray))
+            }
+
+            Text(endTime, style = MaterialTheme.typography.labelSmall, color = Color.Black)
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 210.dp)
+                .clickable(onClick = onClick)
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 16.dp)
+                    .shadow(
+                        elevation = 5.dp,
+                        shape = TabbedCardShape(20.dp, 193.dp, 50.dp),
+                    )
+                    .offset(x = 2.dp, y = 4.dp),
+                shape = TabbedCardShape(21.dp, 180.dp, 50.dp),
+                color = bgColor
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+
+                    Column(
+                        modifier = Modifier
+                            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 44.dp)
+                    ) {
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                modifier = Modifier.size(40.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(0xFF1F2937)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_project),
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                text = project.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Surface(
+                            color = Color.Blue.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text(
+                                text = project.priority.uppercase(),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.DateRange, null, tint = Color.DarkGray, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "$startDate - $endDate",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.DarkGray,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Filled.KeyboardDoubleArrowRight,
+                                null,
+                                tint = Color.DarkGray,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+
+                            Text(
+                                text = project.description ?: "No description",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Black.copy(alpha = 0.5f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
+
+
+                        HorizontalDivider(
+                            modifier = Modifier.fillMaxWidth(),
+                            thickness = 1.dp,
+                            color = Color.LightGray
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        if (project.tags.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+
+                            ) {
+                                project.tags.forEach { tag ->
+                                    Surface(
+                                        color = Color.Red.copy(alpha = 0.5f),
+                                        shape = RoundedCornerShape(6.dp),
+                                        border = BorderStroke(1.dp, Color.Black)
+                                    ) {
+                                        Text(
+                                            tag,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "${project.taskCount} Tasks",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.DarkGray,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 16.dp, end = 16.dp)
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 25.dp, end = 7.dp),
+                horizontalAlignment = Alignment.End
             ) {
 
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        project.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                if (project.assignees.isNotEmpty()) {
+                    Box(modifier = Modifier.scale(1.2f)) {
+                        UserAvatar(project.assignees)
+                    }
+                }
 
-                    if (!project.description.isNullOrBlank()) {
-                        Text(
-                            project.description,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                Spacer(Modifier.height(38.dp))
+
+                Box(modifier = Modifier.offset(x = (-10).dp)) {
+                    var showMenu by remember { mutableStateOf(false) }
+
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(Icons.Default.MoreVert, "Menu", tint = Color.DarkGray)
+                    }
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            onClick = { onEdit(); showMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Analytics") },
+                            onClick = { onAnalytics(project.id); showMenu = false }
                         )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PriorityBadge(ProjectPriority.valueOf(project.priority))
-                    Spacer(Modifier.width(8.dp))
-
-                    var showMenu by remember { mutableStateOf(false) }
-
-                    // Fix: Add wrapContentSize to ensure proper anchoring for DropdownMenu
-                    Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Edit") },
-                                onClick = {
-                                    onEdit() // Trigger action first
-                                    showMenu = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Analytics") },
-                                onClick = {
-                                    onAnalytics(project.id) // Trigger action first
-                                    showMenu = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    Text("Start Date", style = MaterialTheme.typography.labelSmall)
-                    Text(TimeUtils.formatProjectDate(project.startDate))
-                }
-
-                Text("${project.taskCount} tasks")
-            }
-
-            if (project.tags.isNotEmpty()) {
-                Spacer(Modifier.height(10.dp))
-                LazyRow {
-                    items(project.tags) { TagChip(it) }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            AssigneesRow(project.assignees)
-        }
-    }
-}
-
-@Composable
-fun PriorityBadge(priority: ProjectPriority) {
-    val (color, bg) =
-        when (priority) {
-            ProjectPriority.LOW -> Color(0xFF4CAF50) to Color(0x334CAF50)
-            ProjectPriority.MEDIUM -> Color(0xFFFF9800) to Color(0x33FF9800)
-            ProjectPriority.HIGH -> Color(0xFFF44336) to Color(0x33F44336)
-        }
-
-    Surface(color = bg, shape = RoundedCornerShape(14.dp)) {
-        Text(priority.displayName, Modifier.padding(horizontal = 8.dp, vertical = 4.dp), color = color)
-    }
-}
-
-@Composable
-fun TagChip(tag: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        Text(tag, Modifier.padding(6.dp))
-    }
-}
-
-@Composable
-fun AssigneesRow(assignees: List<ProjectAssigneeResponse>) {
-
-    val avatarSize = 34.dp
-    val overlapOffset = (-12).dp
-
-    Row(
-        modifier = Modifier.height(avatarSize),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-
-        assignees.take(4).forEachIndexed { index, assignee ->
-
-            Box(
-                modifier = Modifier
-                    .offset(x = overlapOffset * index)
-                    .size(avatarSize)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .border(2.dp, Color.White, CircleShape)
-            ) {
-
-                if (!assignee.profileImageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = Constants.BASE_URL + assignee.profileImageUrl.removePrefix("/"),
-                        contentDescription = assignee.name,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .size(avatarSize)
-                            .clip(CircleShape)
-                    )
-                } else {
-                    Icon(
-                        Icons.Default.Person,
-                        contentDescription = null,
-                        tint = Color.Gray,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .align(Alignment.Center)
-                    )
-                }
-            }
-        }
-
-        val remaining = assignees.size - 4
-        if (remaining > 0) {
-            Box(
-                modifier = Modifier
-                    .offset(x = overlapOffset * 4)
-                    .size(avatarSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "+$remaining",
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
     }
@@ -560,17 +683,81 @@ fun EmptyProjectsView(onCreate: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(painterResource(R.drawable.ic_project), null, Modifier.size(80.dp))
+        Icon(painterResource(R.drawable.ic_project), null, Modifier.size(80.dp), tint = Color.Black.copy(alpha = 0.8f))
 
         Spacer(Modifier.height(12.dp))
         Text("No Projects Yet")
         Text("Create your first project to get started")
         Spacer(Modifier.height(18.dp))
 
-        Button(onClick = onCreate) {
+        Button(onClick = onCreate, colors = ButtonDefaults.buttonColors(Color.Black.copy(alpha = 0.8f))) {
             Icon(Icons.Default.Add, null)
             Spacer(Modifier.width(8.dp))
             Text("Create Project")
         }
+    }
+}
+
+
+fun formatTimeFromIso(iso: String): String {
+    return try {
+        val instant = java.time.Instant.parse(iso)
+        val localTime = instant
+            .atZone(java.time.ZoneId.systemDefault())
+            .toLocalTime()
+        localTime.format(java.time.format.DateTimeFormatter.ofPattern("hh a"))
+    } catch (e: Exception) {
+        "$e"
+    }
+}
+
+fun formatDateFromIso(iso: String?): String {
+    if (iso.isNullOrBlank()) return "--"
+    return try {
+        val instant = java.time.Instant.parse(iso)
+        instant.atZone(java.time.ZoneId.systemDefault())
+            .toLocalDate()
+            .format(java.time.format.DateTimeFormatter.ofPattern("dd MMM"))
+    } catch (e: Exception) {
+        "$e"
+    }
+}
+
+class TabbedCardShape(
+    private val cornerRadius: Dp = 20.dp,
+    private val tabWidth: Dp = 150.dp,
+    private val cutoutHeight: Dp = 50.dp
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val radius = with(density) { cornerRadius.toPx() }
+        val rawTabW = with(density) { tabWidth.toPx() }
+        val cutH = with(density) { cutoutHeight.toPx() }
+        val w = size.width
+        val h = size.height
+
+        val tabW = rawTabW.coerceAtMost(w - (radius * 3))
+
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, radius)
+            quadraticBezierTo(0f, 0f, radius, 0f)
+            lineTo(tabW, 0f)
+            cubicTo(
+                tabW + radius, 0f,
+                tabW + radius, cutH,
+                tabW + (radius * 2), cutH
+            )
+            lineTo(w - radius, cutH)
+            quadraticBezierTo(w, cutH, w, cutH + radius)
+            lineTo(w, h - radius)
+            quadraticBezierTo(w, h, w - radius, h)
+            lineTo(radius, h)
+            quadraticBezierTo(0f, h, 0f, h - radius)
+            close()
+        }
+        return Outline.Generic(path)
     }
 }
