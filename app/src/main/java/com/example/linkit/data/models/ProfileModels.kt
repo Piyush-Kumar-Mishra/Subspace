@@ -47,3 +47,14 @@ data class ConnectionResponse(
 data class ProfileStatusResponse(
     val profileCompleted: Boolean
 )
+
+data class UserConnection(
+    val id: Long,
+    val requesterId: Long,
+    val addresseeId: Long,
+    val status: String,
+    val createdAt: String,
+    val requesterName: String? = null,
+    val requesterCompany: String? = null,
+    val requesterImage: String? = null
+)
