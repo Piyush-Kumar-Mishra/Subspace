@@ -1,33 +1,28 @@
 package com.example.linkit.data.models
 
-import kotlinx.serialization.Serializable
-
-@Serializable
 data class CreateProjectRequest(
     val name: String,
     val description: String?,
-    val startDate: String,
+    val endDate: String,
     val priority: String,
     val assigneeIds: List<Long>,
     val tags: List<String>
 )
 
-@Serializable
 data class UpdateProjectRequest(
     val name: String,
     val description: String?,
-    val startDate: String,
+    val endDate: String,
     val priority: String,
     val assigneeIds: List<Long>,
     val tags: List<String>
 )
 
-@Serializable
 data class ProjectResponse(
     val id: Long,
     val name: String,
     val description: String?,
-    val startDate: String,
+    val endDate: String,
     val priority: String,
     val assignees: List<ProjectAssigneeResponse>,
     val tags: List<String>,
@@ -36,19 +31,18 @@ data class ProjectResponse(
     val taskCount: Int = 0
 )
 
-@Serializable
+
 data class ProjectAssigneeResponse(
     val userId: Long,
     val name: String,
     val profileImageUrl: String?
 )
 
-@Serializable
+
 data class ProjectsResponse(
     val projects: List<ProjectResponse>
 )
 
-@Serializable
 data class CreateTaskRequest(
     val name: String,
     val description: String?,
@@ -59,7 +53,6 @@ data class CreateTaskRequest(
     val status: String
 )
 
-@Serializable
 data class UpdateTaskRequest(
     val name: String,
     val description: String?,
@@ -69,7 +62,6 @@ data class UpdateTaskRequest(
     val status: String
 )
 
-@Serializable
 data class TaskResponse(
     val id: Long,
     val name: String,
@@ -82,22 +74,18 @@ data class TaskResponse(
     val status: String,
     val createdBy: Long,
     val createdAt: String,
-//    val messageCount: Int = 0,
     val attachmentCount: Int = 0
 )
 
-@Serializable
 data class TasksResponse(
     val tasks: List<TaskResponse>
 )
 
-@Serializable
 data class TaskMessageRequest(
     val content: String,
     val messageType: String = "TEXT"
 )
 
-@Serializable
 data class TaskMessageResponse(
     val id: Long,
     val taskId: Long,
@@ -107,12 +95,10 @@ data class TaskMessageResponse(
     val createdAt: String
 )
 
-@Serializable
 data class TaskMessagesResponse(
     val messages: List<TaskMessageResponse>
 )
 
-@Serializable
 data class TaskAttachmentResponse(
     val id: Long,
     val taskId: Long,
@@ -125,12 +111,10 @@ data class TaskAttachmentResponse(
     val uploadedAt: String
 )
 
-@Serializable
 data class TaskAttachmentsResponse(
     val attachments: List<TaskAttachmentResponse>
 )
 
-@Serializable
 data class NotificationRequest(
     val token: String,
     val platform: String
@@ -148,7 +132,6 @@ enum class TaskStatus(val displayName: String) {
     COMPLETED("Completed")
 }
 
-@Serializable
 data class UserSearchResult(
     val userId: Long,
     val name: String,
