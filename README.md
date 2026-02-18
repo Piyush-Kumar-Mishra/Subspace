@@ -1,19 +1,78 @@
-# 🚀 Subspace – Collaborative Project Management App
+# ▣ Subspace Collaborative Project Management App
 
-**Subspace** is a modern Android application designed to help teams collaborate efficiently through real-time task management and intelligent analytics.  
-Built fully from scratch using cutting-edge Android technologies, Subspace delivers a smooth, scalable, and intuitive workflow for individuals and teams.
+⧉  **Subspace** is a full-stack Android project management application built for team collaboration.
+It allows teams to manage their work from a mobile app. The app supports offline usage by storing data locally and syncing with the server when the internet is available.
 
----
+⧉ Projects | Tasks | Chat | Polls | Analytics | File Sharing | Team Management | Priority Tracking | Deadlines | Activity Logs | Notifications
 
-## 🔐 Security
+## Tech
 
-| Feature | Description |
-|--------|-------------|
-| **JWT Authentication** | Secure token–based login & session validation |
-| **Session Handling** | Ensures users stay authenticated safely |
-| **Password Hashing** | All passwords encrypted before storage |
-| **Protected API Routes** | Only authorized users can access sensitive endpoints |
 
+
+
+<br>
+<table>
+  <tr>
+    <td align="center" width="96">
+      <a href="#macropower-tech">
+        <img width="500" height="700" alt="Screenshot_2026-02-18_204416-removebg-preview" src="https://github.com/user-attachments/assets/cf23ed12-9dde-4c7a-94e4-17c54cb52b45" />
+      </a>
+      <br>JWT
+    </td>
+        <td align="center" width="96"><img width="512" height="512" alt="IntelliJ IDEA" src="https://github.com/user-attachments/assets/56d811de-0168-4360-a4d4-dd9bb45cd052" />
+      <a href="#macropower-tech">
+      </a>
+      <br>IntelliJ IDEA
+    </td>
+     <td align="center" width="96">
+      <a href="#macropower-tech" >
+        <img src="https://github.com/user-attachments/assets/ba747568-4fc7-434d-a934-689e44a2de6b" width="48" height="48" alt="kotlin" />
+      </a>
+      <br>Kotlin
+    </td>
+    <td align="center" width="96">
+      <a href="#macropower-tech">
+        <img src="https://github.com/user-attachments/assets/a4f5c3f6-baee-49a8-8f42-c7ba8a51ca90" width="48" height="48" alt="TypeScript" />
+      </a>
+      <br>Ktor
+    </td>
+    <td align="center" width="96">
+      <a href="#macropower-tech" >
+       <img width="320" height="180" alt="OIP-removebg-preview" src="https://github.com/user-attachments/assets/46eca784-ef8e-40b4-b194-6c30e896ec27" />
+      </a>
+      <br>Compose
+    </td>
+    <td align="center" width="96"> 
+      <a href="#macropower-tech" >
+        <img width="400" height="400" alt="1048085" src="https://github.com/user-attachments/assets/3acd83c4-1cc1-4967-a2a2-46573027baad" />
+      </a>
+      <br>AWS S3
+    </td>
+    <td align="center"  width="96">
+      <a href="#macropower-tech">
+       <img width="169" height="180" alt="OIP-removebg-preview (1)" src="https://github.com/user-attachments/assets/696b8707-0b80-4b28-96ab-c840841baa20" />
+      </a>
+      <br>AWS EC2
+    </td>
+      <td align="center" width="96">
+      <a href="#macropower-tech" >
+        <img width="180" height="180" alt="OIP-removebg-preview (2)" src="https://github.com/user-attachments/assets/c8cebe40-d479-4b11-bbd7-3f104fd8506d" />
+      </a>
+      <br>AWS RDS
+    </td>
+      <td align="center" width="96">
+      <a href="#macropower-tech" >
+        <img width="100" height="100" alt="image-removebg-preview" src="https://github.com/user-attachments/assets/fe8bfc48-49fb-4aae-bf8a-d8b03badf960" />
+      </a>
+      <br>WebSokets
+      <td align="center" width="96">
+      <a href="#macropower-tech" >
+        <img src="https://github.com/user-attachments/assets/d9e9bcf4-fe28-41dc-a295-0ce0c58d9f1c" width="48" height="48" alt="Firebase" />
+      </a>
+      <br>FCM
+    </td>
+  </tr>
+</table>
 
 
 ## 🔥 ✨ Key Features
