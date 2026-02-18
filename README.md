@@ -5,11 +5,7 @@ It allows teams to manage their work from a mobile app. The app supports offline
 
 ⧉ Projects | Tasks | Chat | Polls | Analytics | File Sharing | Team Management | Priority Tracking | Deadlines | Activity Logs | Notifications
 
-## Tech
-
-
-
-
+## ⬤ Languages & Technologies
 <br>
 <table>
   <tr>
@@ -74,6 +70,11 @@ It allows teams to manage their work from a mobile app. The app supports offline
   </tr>
 </table>
 
+| JWT Authentication | Password Hashing | Protected API Routes |  S3 Signed URLs |
+|--------------------|------------------|------------------|----------------------|
+
+| MVVM Architecture | Repository Pattern | Retrofit |Kotlin Coroutines | Dependency Injection |
+|-------------------|-------------------|-----------|------------------|-----------------------|
 
 ## 🔥 ✨ Key Features
 
