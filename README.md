@@ -1,3 +1,4 @@
+# ▣ Subspace Collaborative Project Management App
 
 ⧉  **Subspace** is a full-stack Android project management application built for team collaboration.
 It allows teams to manage their work from a mobile app. The app supports offline usage by storing data locally and syncing with the server when the internet is available.
@@ -78,6 +79,7 @@ It allows teams to manage their work from a mobile app. The app supports offline
 
 <img width="200" height="600" alt="Screenshot_2026-02-19_010003-removebg-preview" src="https://github.com/user-attachments/assets/96e63b85-9508-4803-a4e7-82ee5823a5ca" />
 
+<img width="200" height="600" alt="Screenshot_2026-02-18_230942-removebg-preview" src="https://github.com/user-attachments/assets/48ba7b76-d737-447f-9310-a63705c76da2" />
 
 ## 🔥 ✨ Key Features
 
