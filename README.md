@@ -77,9 +77,11 @@ It allows teams to manage their work from a mobile app. The app supports offline
 |-------------------|-------------------|-----------|------------------|-----------------------|
 
 
+## ⬤ High Level Diagram
 
-
-
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/b29c3224-3548-4c15-a8f6-fbd6476e9259" width="900" height="550" />
+</p>
 
 ## ⬤ User Features
 - 📝 Personalized Dashboard – View assigned tasks, project summaries, deadlines, and real-time progress in one place.
@@ -124,6 +126,7 @@ It allows teams to manage their work from a mobile app. The app supports offline
 <img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" />
 <img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" />
 <img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
+
 
 ## 📦 Libraries Used
 
