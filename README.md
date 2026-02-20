@@ -76,10 +76,22 @@ It allows teams to manage their work from a mobile app. The app supports offline
 | MVVM Architecture | Repository Pattern | Retrofit |Kotlin Coroutines | Dependency Injection |
 |-------------------|-------------------|-----------|------------------|-----------------------|
 
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/af3495b5-0c80-4223-884e-eff28f2e6206" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/425e478f-02a9-4e8b-b69e-77f2ee5c5c33" />
 
-<img width="200" height="600" alt="Screenshot_2026-02-19_010003-removebg-preview" src="https://github.com/user-attachments/assets/96e63b85-9508-4803-a4e7-82ee5823a5ca" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" />
 
-<img width="200" height="600" alt="Screenshot_2026-02-18_230942-removebg-preview" src="https://github.com/user-attachments/assets/48ba7b76-d737-447f-9310-a63705c76da2" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/9d7adb38-021b-4632-bfc8-77c26d2646e2" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/a5b0e64f-6e57-4bdb-9364-527175089764" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/f693c446-01e4-47d3-8d00-041eb1dd2909" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/03f9ed29-ed30-44a7-8c6b-597e9266d9a6" />
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" />
+
+<img width="250" height="2000" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
+
 
 ## 🔥 ✨ Key Features
 
@@ -118,7 +130,7 @@ Visual dashboards using **VICO Chart** for:
 
 ## 📸 Screenshots
 
-<img width="383" height="822" alt="Screenshot 2025-11-30 225022" src="https://github.com/user-attachments/assets/31a35c09-98dd-4e9b-821a-783f8dace1b4" />
+<!-- <img width="383" height="822" alt="Screenshot 2025-11-30 225022" src="https://github.com/user-attachments/assets/31a35c09-98dd-4e9b-821a-783f8dace1b4" />
 <img width="371" height="823" alt="Screenshot 2025-11-30 225054" src="https://github.com/user-attachments/assets/248fa265-a59d-4d9e-a4f4-5e5300dac11b" />
 <img width="384" height="802" alt="Screenshot 2025-09-15 221008" src="https://github.com/user-attachments/assets/ed8a692d-b5e6-4c59-a8eb-e797cb4878a8" />
 <img width="329" height="731" alt="Screenshot 2026-02-03 002123" src="https://github.com/user-attachments/assets/e6234904-09cc-4302-94a7-2ba0dc2df1b5" />
@@ -130,7 +142,7 @@ Visual dashboards using **VICO Chart** for:
 <img width="376" height="809" alt="Screenshot 2025-12-07 014240" src="https://github.com/user-attachments/assets/cbf50b90-2dc6-48fd-945c-aad2e5a4fd52" />
 <img width="371" height="804" alt="Screenshot 2025-12-07 013954" src="https://github.com/user-attachments/assets/9e446b71-b229-46d7-a10a-4d390303d4c1" />
 <img width="376" height="827" alt="Screenshot 2025-12-07 014003" src="https://github.com/user-attachments/assets/6527199c-9850-4213-9ba6-dc8266a38b8b" />
-<img width="380" height="815" alt="Screenshot 2025-12-07 014011" src="https://github.com/user-attachments/assets/055b3719-2894-40cd-b653-e60c57410411" />
+<img width="380" height="815" alt="Screenshot 2025-12-07 014011" src="https://github.com/user-attachments/assets/055b3719-2894-40cd-b653-e60c57410411" /> -->
 
 ---
 
