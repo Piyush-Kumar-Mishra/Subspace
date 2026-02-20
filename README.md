@@ -121,9 +121,9 @@ It allows teams to manage their work from a mobile app. The app supports offline
 - 🤝 Connection Requests – Send, receive, and manage connection requests with accept/reject functionality.
 - 🌐 User Connections Management – Build and maintain connections with real-time updates and secure user relationship handling.
 
-<img width="290" height="2600" alt="image" src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" />
-<img width="290" height="2600" alt="image" src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" />
-<img width="290" height="2000" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
+<img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" />
+<img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" />
+<img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
 
 ## 📦 Libraries Used
 
