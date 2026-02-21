@@ -124,6 +124,8 @@ plugins {
     kotlin("kapt")
     alias(libs.plugins.dagger.hilt)
     alias(libs.plugins.kotlin.serialization)
+    id("com.google.gms.google-services")
+
 
 }
 
@@ -176,6 +178,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.compose.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -226,11 +229,6 @@ dependencies {
 
     implementation(libs.retrofit2.kotlinx.serialization.converter)
 
-//    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
-
-//    implementation(libs.androidchart)
-//    implementation(libs.vico.views)
-
     implementation(libs.mpAndroidChart)
     implementation(libs.vico.compose)
     implementation(libs.vico.compose.m3)
@@ -238,6 +236,15 @@ dependencies {
 
     implementation("androidx.compose.ui:ui:1.5.0")
     implementation("androidx.compose.material:material:1.5.0")
+
+    implementation(platform("com.google.firebase:firebase-bom:34.7.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-messaging")
+
+    implementation("androidx.compose.material:material-icons-core:1.6.1")
+    implementation("androidx.compose.material:material-icons-extended:1.6.1")
+
+
 }
 
 kapt { correctErrorTypes = true }

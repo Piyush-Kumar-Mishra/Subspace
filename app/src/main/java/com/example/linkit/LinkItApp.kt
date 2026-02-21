@@ -3,8 +3,6 @@ package com.example.linkit
 import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import com.example.linkit.util.AuthImageInterceptor
-import com.example.linkit.data.TokenStore
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -12,14 +10,10 @@ import javax.inject.Inject
 class LinkItApp : Application(), ImageLoaderFactory {
 
     @Inject
-    lateinit var tokenStore: TokenStore
+    lateinit var imageLoader: ImageLoader
 
     override fun newImageLoader(): ImageLoader {
-        return ImageLoader.Builder(this)
-            .components {
-                add(AuthImageInterceptor(tokenStore))
-            }
-            .crossfade(true)
-            .build()
+        return imageLoader
     }
 }
+

@@ -8,9 +8,7 @@ import com.example.linkit.data.local.entity.toChatMessageResponse
 import com.example.linkit.data.models.ChatHistoryResponse
 import com.example.linkit.data.models.ChatMessageRequest
 import com.example.linkit.data.models.ChatMessageResponse
-import com.example.linkit.data.models.TypingIndicatorRequest
 import com.example.linkit.util.NetworkResult
-import com.example.linkit.util.safeApiCall
 import com.example.linkit.util.safeApiCallDirect
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +23,6 @@ interface ChatRepository {
     // HTTP
     fun getChatHistory(projectId: Long, beforeTimestamp: String? = null, limit: Int = 20): Flow<NetworkResult<ChatHistoryResponse>>
     fun sendMessage(projectId: Long, content: String): Flow<NetworkResult<ChatMessageResponse>>
-    fun updateTypingStatus(projectId: Long, isTyping: Boolean): Flow<NetworkResult<Unit>>
-    fun getOnlineUsers(projectId: Long): Flow<NetworkResult<List<Long>>>
 
     // WebSocket
     fun connectToChat(projectId: Long)
@@ -35,8 +31,6 @@ interface ChatRepository {
 
     // WebSocket streams
     val incomingMessages: Flow<ChatMessageResponse>
-    val typingUpdates: Flow<Pair<Long, String>>
-    val onlineUsersUpdates: Flow<List<Long>>
     val connectionStatus: Flow<Boolean>
 }
 
@@ -50,13 +44,9 @@ class ChatRepositoryImpl @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val _incomingMessages = MutableSharedFlow<ChatMessageResponse>(extraBufferCapacity = 64)
-    private val _typingUpdates = MutableSharedFlow<Pair<Long, String>>(extraBufferCapacity = 64)
-    private val _onlineUsersUpdates = MutableSharedFlow<List<Long>>(extraBufferCapacity = 64)
     private val _connectionStatus = MutableStateFlow(false)
 
     override val incomingMessages: Flow<ChatMessageResponse> = _incomingMessages.asSharedFlow()
-    override val typingUpdates: Flow<Pair<Long, String>> = _typingUpdates.asSharedFlow()
-    override val onlineUsersUpdates: Flow<List<Long>> = _onlineUsersUpdates.asSharedFlow()
     override val connectionStatus: Flow<Boolean> = _connectionStatus.asStateFlow()
 
     init {
@@ -65,8 +55,6 @@ class ChatRepositoryImpl @Inject constructor(
 
     private fun startWebSocketObservers() {
         scope.launch { webSocketClient.incomingMessages.collect { _incomingMessages.emit(it) } }
-        scope.launch { webSocketClient.typingUpdates.collect { _typingUpdates.emit(it) } }
-        scope.launch { webSocketClient.onlineUsersUpdates.collect { _onlineUsersUpdates.emit(it) } }
         scope.launch { webSocketClient.connectionStatus.collect { _connectionStatus.value = it } }
     }
 
@@ -75,7 +63,6 @@ class ChatRepositoryImpl @Inject constructor(
         beforeTimestamp: String?,
         limit: Int
     ): Flow<NetworkResult<ChatHistoryResponse>> = flow {
-        // Emit local cache first (if present), but DO NOT return.
         val local = chatMessageDao.getMessages(projectId, limit)
         if (local.isNotEmpty()) {
             emit(
@@ -144,29 +131,6 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun updateTypingStatus(projectId: Long, isTyping: Boolean): Flow<NetworkResult<Unit>> = flow {
-        emit(NetworkResult.Loading())
-
-        val result = safeApiCall {
-            chatApi.updateTypingStatus(projectId, TypingIndicatorRequest(isTyping))
-        }
-
-        when (result) {
-            is NetworkResult.Success -> emit(NetworkResult.Success(Unit))
-            is NetworkResult.Error -> emit(result)
-            is NetworkResult.Loading -> emit(result)
-        }
-    }
-
-    override fun getOnlineUsers(projectId: Long): Flow<NetworkResult<List<Long>>> = flow {
-        emit(NetworkResult.Loading())
-        emit(
-            safeApiCallDirect {
-                chatApi.getOnlineUsers(projectId)
-            }
-        )
-    }
-
     override fun connectToChat(projectId: Long) {
         webSocketClient.connect(projectId)
     }
@@ -179,15 +143,4 @@ class ChatRepositoryImpl @Inject constructor(
         webSocketClient.sendMessage(content)
     }
 
-    suspend fun syncUnsentMessages(projectId: Long) {
-        val unsent = chatMessageDao.getUnsyncedMessages(projectId)
-        for (msg in unsent) {
-            val result = safeApiCallDirect {
-                chatApi.sendMessage(projectId, ChatMessageRequest(msg.content))
-            }
-            if (result is NetworkResult.Success) {
-                chatMessageDao.markMessageAsSynced(msg.id)
-            }
-        }
-    }
 }

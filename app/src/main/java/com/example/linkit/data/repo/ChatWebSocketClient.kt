@@ -3,6 +3,7 @@ package com.example.linkit.data.repo
 import com.example.linkit.data.TokenStore
 import com.example.linkit.data.models.ChatMessageResponse
 import com.example.linkit.data.models.WebSocketChatMessage
+import com.example.linkit.util.Constants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -13,7 +14,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -40,17 +40,13 @@ class ChatWebSocketClient @Inject constructor(
     private val _incomingMessages = MutableSharedFlow<ChatMessageResponse>(extraBufferCapacity = 64)
     val incomingMessages = _incomingMessages.asSharedFlow()
 
-    private val _typingUpdates = MutableSharedFlow<Pair<Long, String>>(extraBufferCapacity = 64)
-    val typingUpdates = _typingUpdates.asSharedFlow()
-
-    private val _onlineUsersUpdates = MutableSharedFlow<List<Long>>(extraBufferCapacity = 64)
-    val onlineUsersUpdates = _onlineUsersUpdates.asSharedFlow()
-
     private val json = Json { ignoreUnknownKeys = true }
 
     fun connect(projectId: Long) {
         currentProjectId = projectId
-        disconnect()
+        webSocket?.close(1000, "Reconnecting")
+        webSocket = null
+
 
         scope.launch {
             val token = tokenStore.token.first()
@@ -64,20 +60,31 @@ class ChatWebSocketClient @Inject constructor(
                 .readTimeout(0, TimeUnit.MILLISECONDS)
                 .build()
 
+            val baseUrl = Constants.BASE_URL
+            val wsScheme = if (baseUrl.startsWith("https")) "wss" else "ws"
+            val cleanBase = baseUrl.removePrefix("http://").removePrefix("https://").removeSuffix("/")
+            val fullUrl = "$wsScheme://$cleanBase/ws/chat/$projectId"
+
+            Timber.d("Connecting to WebSocket URL: $fullUrl")
+
             val request = Request.Builder()
-                .url("ws://192.168.1.100:8080/ws/chat/$projectId")
+//                .url("ws://192.168.1.100:8080/ws/chat/$projectId")
+//                .url("ws://10.189.246.117:8080/ws/chat/$projectId")   //yes
+                .url(fullUrl)
                 .addHeader("Authorization", "Bearer $token")
                 .build()
 
             webSocket = client.newWebSocket(request, object : WebSocketListener() {
 
-                override fun onOpen(ws: WebSocket, response: Response) {
+                override fun onOpen(webSocket: WebSocket, response: Response) {
                     Timber.i("WebSocket connected to project $projectId")
                     _connectionStatus.value = true
                     stopReconnectionAttempts()
                 }
 
-                override fun onMessage(ws: WebSocket, text: String) {
+                override fun onMessage(webSocket: WebSocket, text: String) {
+                    Timber.d("WS RECEIVED RAW: $text")
+
                     scope.launch {
                         try {
                             val msg = json.decodeFromString<WebSocketChatMessage>(text)
@@ -120,13 +127,7 @@ class ChatWebSocketClient @Inject constructor(
         scope.launch {
             when (message.type) {
                 "MESSAGE" -> message.message?.let { _incomingMessages.emit(it) }
-                "TYPING" -> {
-                    val id = message.typingUserId
-                    val name = message.typingUserName
-                    if (id != null && name != null) _typingUpdates.emit(id to name)
-                }
-                "USER_JOINED", "USER_LEFT", "CONNECTED" ->
-                    message.onlineUsers?.let { _onlineUsersUpdates.emit(it) }
+
             }
         }
     }

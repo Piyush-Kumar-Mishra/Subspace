@@ -1,7 +1,6 @@
 package com.example.linkit.util
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 import kotlin.math.min

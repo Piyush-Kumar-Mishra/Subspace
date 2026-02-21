@@ -17,6 +17,7 @@ retrofit2KotlinxSerializationConverter = "1.0.0"
 roomKtx = "2.7.2"
 mpAndroidChart = "v3.1.0"
 vico = "2.0.0-alpha.20"
+ui = "1.10.1"
 
 [libraries]
 androidx-activity-compose-v180 = { module = "androidx.activity:activity-compose", version.ref = "activityComposeVersion" }
@@ -47,6 +48,7 @@ mpAndroidChart = { group = "com.github.PhilJay", name = "MPAndroidChart", versio
 vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.ref = "vico" }
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
 
 
 [plugins]

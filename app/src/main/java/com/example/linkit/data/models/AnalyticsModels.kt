@@ -28,8 +28,10 @@ data class ProductivityResponse(
 
 
 data class AssigneeStatsResponse(
+    val userId: Long,
     val assigneeId: Long,
     val assigneeName: String?,
+    val profileImageUrl: String?,
     val assigned: Int,
     val completed: Int,
     val pending: Int,

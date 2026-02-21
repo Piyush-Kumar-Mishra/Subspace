@@ -6,12 +6,12 @@ import com.example.linkit.data.models.ChatMessageResponse
 import com.example.linkit.data.models.ChatUiState
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ChatRepository
+import com.example.linkit.util.JwtUtils
 import com.example.linkit.util.NetworkResult
 import com.example.linkit.util.TimeUtils
 import com.example.linkit.util.UiEvent
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +35,6 @@ class ChatViewModel @Inject constructor(
 
     private var currentProjectId: Long? = null
     private var currentUserId: Long? = null
-    private var typingDebounceJob: Job? = null
     private var webSocketJob: Job? = null
 
     init {
@@ -45,9 +44,34 @@ class ChatViewModel @Inject constructor(
 
     private fun loadCurrentUserId() {
         viewModelScope.launch {
-            authRepository.getUserId().collect { userId ->
-                currentUserId = userId
+            launch {
+                authRepository.getUserId().collect { userId ->
+                    if (userId != null) {
+                        currentUserId = userId
+                        reProcessMessages()
+                    }
+                }
             }
+
+            launch {
+                authRepository.getToken().collect { token ->
+                    if (token != null && currentUserId == null) {
+                        val userId = JwtUtils.getUserIdFromToken(token)
+                        if (userId != null) {
+                            currentUserId = userId
+                            reProcessMessages()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun reProcessMessages() {
+        _uiState.update { state ->
+            if (state.messages.isNotEmpty()) {
+                state.copy(messages = processMessagesForReverseLayout(state.messages))
+            } else state
         }
     }
 
@@ -55,7 +79,6 @@ class ChatViewModel @Inject constructor(
         currentProjectId = projectId
         loadInitialMessages()
         connectWebSocket()
-        loadOnlineUsers()
     }
 
     private fun loadInitialMessages() {
@@ -93,6 +116,7 @@ class ChatViewModel @Inject constructor(
         if (messages.isEmpty()) return emptyList()
 
         val sortedList = messages.sortedByDescending { it.createdAt }
+        val myId = currentUserId
 
         return sortedList.mapIndexed { index, message ->
             val nextOlderMessage = if (index < sortedList.lastIndex) sortedList[index + 1] else null
@@ -102,8 +126,14 @@ class ChatViewModel @Inject constructor(
 
             val showDateHeader = dateHeader != olderDateHeader
 
+            val isOwn = if (message.sender != null) {
+                message.sender.userId == myId
+            } else {
+                message.isOwnMessage
+            }
+
             message.copy(
-                isOwnMessage = message.sender?.userId == currentUserId,
+                isOwnMessage = isOwn,
                 showDateHeader = showDateHeader,
                 dateHeader = if (showDateHeader) dateHeader else null,
                 formattedTime = TimeUtils.formatTime(message.createdAt)
@@ -147,20 +177,6 @@ class ChatViewModel @Inject constructor(
 
     fun onInputTextChanged(text: String) {
         _uiState.update { it.copy(inputText = text) }
-        handleTypingIndicator()
-    }
-
-    private fun handleTypingIndicator() {
-        typingDebounceJob?.cancel()
-        typingDebounceJob = viewModelScope.launch {
-            delay(300)
-            currentProjectId?.let { projectId ->
-                // Fire and forget typing status
-                chatRepository.updateTypingStatus(projectId, true).collect {}
-                delay(2000)
-                chatRepository.updateTypingStatus(projectId, false).collect {}
-            }
-        }
     }
 
     fun sendMessage() {
@@ -188,23 +204,29 @@ class ChatViewModel @Inject constructor(
             state.copy(
                 messages = processMessagesForReverseLayout(updatedList),
                 isSending = true,
-                inputText = "",
-                typingUsers = emptyMap()
+                inputText = ""
             )
         }
 
-        // 2. Network Call
         viewModelScope.launch {
             chatRepository.sendMessage(currentProjectId!!, messageText).collect { result ->
                 when (result) {
                     is NetworkResult.Success -> {
-                        // Server returned real message. Replace temp message.
                         val realMessage = result.data
+
                         _uiState.update { state ->
-                            // Remove temp, add real, re-process
-                            val cleanList = state.messages.filter { it.id != tempId } + realMessage
+                            val listWithoutTemp = state.messages.filter { it.id != tempId }
+
+                            val finalList = if (listWithoutTemp.any { it.id == realMessage.id }) {
+                                listWithoutTemp.map {
+                                    if (it.id == realMessage.id) realMessage else it
+                                }
+                            } else {
+                                listWithoutTemp + realMessage
+                            }
+
                             state.copy(
-                                messages = processMessagesForReverseLayout(cleanList),
+                                messages = processMessagesForReverseLayout(finalList),
                                 isSending = false
                             )
                         }
@@ -226,7 +248,6 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    // WebSocket Logic
     private fun connectWebSocket() {
         currentProjectId?.let { chatRepository.connectToChat(it) }
     }
@@ -238,16 +259,7 @@ class ChatViewModel @Inject constructor(
                     handleIncomingMessage(message)
                 }
             }
-            launch {
-                chatRepository.typingUpdates.collect { (userId, userName) ->
-                    handleTypingUpdate(userId, userName)
-                }
-            }
-            launch {
-                chatRepository.onlineUsersUpdates.collect { onlineUsers ->
-                    _uiState.update { it.copy(onlineUsers = onlineUsers) }
-                }
-            }
+
             launch {
                 chatRepository.connectionStatus.collect { isConnected ->
                     _uiState.update { it.copy(isConnected = isConnected) }
@@ -259,47 +271,12 @@ class ChatViewModel @Inject constructor(
     private fun handleIncomingMessage(message: ChatMessageResponse) {
         if (_uiState.value.messages.any { it.id == message.id }) return
 
-        val updatedMsg = message.copy(
-            isOwnMessage = message.sender?.userId == currentUserId
-        )
-
         _uiState.update { state ->
-            val newList = state.messages + updatedMsg
+            val newList = state.messages + message
             state.copy(messages = processMessagesForReverseLayout(newList))
         }
     }
 
-    private fun handleTypingUpdate(userId: Long, userName: String) {
-        if (userId == currentUserId) return // Don't show own typing
-
-        _uiState.update { state ->
-            val typingUsers = state.typingUsers.toMutableMap()
-            typingUsers[userId] = userName
-            state.copy(typingUsers = typingUsers)
-        }
-
-        // Auto-remove typing indicator after 3 seconds
-        viewModelScope.launch {
-            delay(3000)
-            _uiState.update { state ->
-                val updatedTypingUsers = state.typingUsers.toMutableMap()
-                updatedTypingUsers.remove(userId)
-                state.copy(typingUsers = updatedTypingUsers)
-            }
-        }
-    }
-
-    private fun loadOnlineUsers() {
-        currentProjectId?.let { projectId ->
-            viewModelScope.launch {
-                chatRepository.getOnlineUsers(projectId).collect { result ->
-                    if (result is NetworkResult.Success) {
-                        _uiState.update { it.copy(onlineUsers = result.data) }
-                    }
-                }
-            }
-        }
-    }
 
     fun disconnect() {
         webSocketJob?.cancel()

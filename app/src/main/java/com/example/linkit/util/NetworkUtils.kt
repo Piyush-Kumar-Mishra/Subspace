@@ -20,7 +20,6 @@ class NetworkUtils @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    // Continuous updates as Flow -> true = online, false = offline
     val networkStatus: Flow<Boolean> = callbackFlow {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -29,7 +28,6 @@ class NetworkUtils @Inject constructor(
 
         val networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                trySend(true) // online
             }
 
             override fun onLost(network: Network) {

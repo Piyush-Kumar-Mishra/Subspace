@@ -19,7 +19,6 @@ object JwtUtils {
         return try {
             val parts = token.split(".")
             if (parts.size != 3) return null
-
             // Decode the payload (second part of the token)
             val payload = parts[1]
             val decodedBytes = Base64.decode(payload, Base64.URL_SAFE or Base64.NO_PADDING)
