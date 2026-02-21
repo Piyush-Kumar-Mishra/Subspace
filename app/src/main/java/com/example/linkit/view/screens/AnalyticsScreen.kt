@@ -2,7 +2,6 @@ package com.example.linkit.view.screens
 
 import android.graphics.Color as AndroidColor
 import android.graphics.Typeface
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,10 +10,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.PeopleAlt
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -25,14 +25,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.linkit.data.models.*
+import com.example.linkit.view.components.AuthorizedAsyncImage
 import com.example.linkit.viewmodel.AnalyticsViewModel
 import com.github.mikephil.charting.animation.Easing
 import com.github.mikephil.charting.charts.BarChart
@@ -82,7 +81,8 @@ fun AnalyticsScreen(
                 title = {
                     Text(
                         "Project Analytics",
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Black.copy(0.8f)
                     )
                 },
                 navigationIcon = {
@@ -105,25 +105,25 @@ fun AnalyticsScreen(
             TabRow(
                 selectedTabIndex = uiState.selectedTab,
                 containerColor = AnalyticsColors.CardBg,
-                contentColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.Black.copy(0.8f),
                 indicator = { tabPositions ->
                     TabRowDefaults.SecondaryIndicator(
                         Modifier.tabIndicatorOffset(tabPositions[uiState.selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
+                        color = Color.Black.copy(0.8f)
                     )
                 }
             ) {
                 Tab(
                     selected = uiState.selectedTab == 0,
                     onClick = { viewModel.onTabSelected(0) },
-                    text = { Text("Overview", fontWeight = FontWeight.Medium) },
-                    icon = { Icon(Icons.Default.Info, null) }
+                    text = { Text("Overview", fontWeight = FontWeight.Medium, color = Color.Black.copy(0.8f)) },
+                    icon = { Icon(Icons.Filled.Code, null, tint = Color.Black.copy(0.8f)) }
                 )
                 Tab(
                     selected = uiState.selectedTab == 1,
                     onClick = { viewModel.onTabSelected(1) },
-                    text = { Text("Team Performance", fontWeight = FontWeight.Medium) },
-                    icon = { Icon(Icons.Default.Person, null) }
+                    text = { Text("Team Performance", fontWeight = FontWeight.Medium, color = Color.Black.copy(0.8f)) },
+                    icon = { Icon(Icons.Filled.PeopleAlt, null, tint = Color.Black.copy(0.8f)) }
                 )
             }
 
@@ -156,10 +156,10 @@ fun ProjectOverviewTab(
 
         item {
             Text(
-                "At a Glance",
+                "Project Overview",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = AnalyticsColors.TextPrimary
+                color = Color.Black.copy(0.8f)
             )
         }
 
@@ -171,7 +171,7 @@ fun ProjectOverviewTab(
                     StatCard(
                         title = "Total Tasks",
                         count = it.totalTasks.toString(),
-                        icon = Icons.Default.List,
+                        icon = Icons.AutoMirrored.Filled.List,
                         color = AnalyticsColors.Blue,
                         modifier = Modifier.weight(1f)
                     )
@@ -191,7 +191,7 @@ fun ProjectOverviewTab(
                         title = "Completed",
                         count = it.completed.toString(),
                         icon = Icons.Default.CheckCircle,
-                        color = AnalyticsColors.Green,
+                        color =  Color.Black.copy(0.8f),
                         modifier = Modifier.weight(1f)
                     )
 
@@ -199,7 +199,7 @@ fun ProjectOverviewTab(
                         title = "In Progress",
                         count = it.inProgress.toString(),
                         icon = Icons.Default.DateRange,
-                        color = AnalyticsColors.Orange,
+                        color = Color.Black.copy(0.8f),
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -315,7 +315,8 @@ fun TeamPerformanceTab(
             Text(
                 "Workload Distribution",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                color = Color.Black.copy(0.8f)
             )
         }
 
@@ -332,6 +333,7 @@ fun TeamPerformanceTab(
                 "Detailed Breakdown",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = Color.Black.copy(0.8f),
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
@@ -357,8 +359,16 @@ fun DetailedAssigneeItem(stat: AssigneeStatsResponse) {
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Custom Avatar
-                UserAvatar(name = stat.assigneeName ?: "?")
+
+                AuthorizedAsyncImage(
+                    imageUrl = stat.profileImageUrl,
+                    contentDescription = "Profile Picture of ${stat.assigneeName}",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape),
+                    cacheKey = stat.userId?.toString(),
+                    isOffline = false
+                )
 
                 Spacer(Modifier.width(12.dp))
 
@@ -565,7 +575,7 @@ fun WorkloadBarChart(workload: List<AssigneeWorkloadResponse>) {
             val labels = workload.map { it.assigneeName?.take(10) ?: "User" }
 
             val dataSet = BarDataSet(entries, "Tasks").apply {
-                color = AndroidColor.parseColor("#673AB7")
+                color = AndroidColor.parseColor("#1A1C2FFF")
                 valueTextSize = 11f
                 valueTextColor = AndroidColor.BLACK
             }
@@ -577,52 +587,6 @@ fun WorkloadBarChart(workload: List<AssigneeWorkloadResponse>) {
         }
     )
 }
-//
-//@Composable
-//fun ProductivityLineChart(points: List<TimeSeriesPointResponse>) {
-//    if (points.isEmpty()) {
-//        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-//            Text("No productivity data recorded yet", color = Color.Gray)
-//        }
-//        return
-//    }
-//
-//    val modelProducer = remember { CartesianChartModelProducer.build() }
-//
-//    LaunchedEffect(points) {
-//        withContext(Dispatchers.Default) {
-//            modelProducer.tryRunTransaction {
-//                lineSeries {
-//                    series(points.map { it.value })
-//                }
-//            }
-//        }
-//    }
-//
-//    Column(modifier = Modifier.fillMaxSize()) {
-//        CartesianChartHost(
-//            chart = rememberCartesianChart(
-//                rememberLineCartesianLayer(),
-//                startAxis = rememberStartAxis(
-//                    // Correct: Use rememberAxisLabelComponent() factory
-//                    label = rememberAxisLabelComponent(color = Color.Black),
-//
-//                    // Correct: Set title text and style separately
-//                    title = "Tasks",
-//                    titleComponent = rememberTextComponent(
-//                        color = Color.Black
-//                    )
-//                ),
-//                bottomAxis = rememberBottomAxis(
-//                    label = rememberAxisLabelComponent(color = Color.Black)
-//                ),
-//            ),
-//            modelProducer = modelProducer,
-//            modifier = Modifier.fillMaxSize()
-//        )
-//    }
-//}
-
 
 @Composable
 fun ProductivityLineChart(points: List<TimeSeriesPointResponse>) {

@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -34,7 +33,7 @@ import com.example.linkit.view.components.AuthorizedAsyncImage
 import com.example.linkit.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 
-val ChatOwnMessageBackground = Color(0xFF007AFF)
+val ChatOwnMessageBackground = Color.Black.copy(0.8f)
 val ChatOtherMessageBackground = Color(0xFFE9E9EB)
 val ChatSystemMessageBackground = Color(0xFFF0F0F0)
 
@@ -53,24 +52,17 @@ fun ChatScreen(
         viewModel.initializeChat(projectId)
     }
 
-    DisposableEffect(Unit) {
-        onDispose { viewModel.disconnect() }
-    }
+
 
     Scaffold(
         topBar = {
             ChatTopBar(
                 projectName = projectName ?: "Project Chat",
-                onlineCount = uiState.onlineUsers.size,
-                isConnected = uiState.isConnected,
                 onBackClick = { navController.popBackStack() }
             )
         },
         bottomBar = {
             Column {
-                if (uiState.typingUsers.isNotEmpty()) {
-                    TypingIndicator(typingUsers = uiState.typingUsers)
-                }
                 MessageInput(
                     messageText = uiState.inputText,
                     isSending = uiState.isSending,
@@ -103,8 +95,6 @@ fun ChatScreen(
 @Composable
 fun ChatTopBar(
     projectName: String,
-    onlineCount: Int,
-    isConnected: Boolean,
     onBackClick: () -> Unit
 ) {
     CenterAlignedTopAppBar(
@@ -116,31 +106,15 @@ fun ChatTopBar(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (isConnected) Color.Green else Color.Red)
-                    )
-                    Text(
-                        text = "$onlineCount online",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         },
         navigationIcon = {
             IconButton(onClick = onBackClick) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
             }
         },
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor =Color.White
         )
     )
 }
@@ -156,7 +130,6 @@ fun MessageList(
     val scope = rememberCoroutineScope()
 
     val newestMessageId = messages.firstOrNull()?.id
-    val isUserScrolling = listState.isScrollInProgress
 
     val showScrollToBottom by remember {
         derivedStateOf {
@@ -168,17 +141,12 @@ fun MessageList(
     LaunchedEffect(newestMessageId) {
         if (messages.isNotEmpty()) {
             val isOwnMessage = messages.first().isOwnMessage
-            // Auto-scroll if:
-            // - I sent the message
-            // - OR I am already looking at the bottom
-            // - OR it's the very first load
             if (isOwnMessage || !showScrollToBottom) {
                 listState.animateScrollToItem(0)
             }
         }
     }
 
-    // Pagination (History) Logic
     val totalItems = listState.layoutInfo.totalItemsCount
     val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
 
@@ -206,7 +174,6 @@ fun MessageList(
                 key = { it.id }
             ) { message ->
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    // 1. Date Header (Visually Top)
                     if (message.showDateHeader) {
                         DateHeader(message.dateHeader ?: "")
                     }
@@ -234,7 +201,6 @@ fun MessageList(
             }
         }
 
-        // Floating "New Messages" Button
         AnimatedVisibility(
             visible = showScrollToBottom,
             enter = fadeIn() + slideInVertically { it / 2 },
@@ -245,8 +211,8 @@ fun MessageList(
         ) {
             FloatingActionButton(
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                containerColor =Color.Black,
+                contentColor = Color.White,
                 shape = CircleShape,
                 modifier = Modifier.size(48.dp)
             ) {
@@ -286,18 +252,27 @@ fun UserMessageItem(message: ChatMessageResponse, isOwnMessage: Boolean) {
         modifier = Modifier.fillMaxWidth()
     ) {
         if (!isOwnMessage) {
-            // Profile Icon Logic
-            if (!message.sender?.profileImageUrl.isNullOrBlank()) {
+            val sender = message.sender
+            if (sender?.profileImageUrl != null) {
                 AuthorizedAsyncImage(
-                    imageUrl = message.sender.profileImageUrl,
-                    contentDescription = message.sender.name ?: "User",
-                    modifier = Modifier.size(32.dp).clip(CircleShape).align(Alignment.Bottom)
+                    imageUrl = sender.profileImageUrl,
+                    contentDescription = sender.name ?: "User",
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .align(Alignment.Bottom),
+                    cacheKey = sender.userId.toString(),
+                    isOffline = false
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Person,
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp).clip(CircleShape).background(Color.LightGray).padding(4.dp),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color.LightGray)
+                        .padding(4.dp),
                     tint = Color.White
                 )
             }
@@ -365,73 +340,35 @@ fun MessageInput(
     onTextChange: (String) -> Unit,
     onSendClick: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Surface(
+        color = Color.Transparent
     ) {
-        OutlinedTextField(
-            value = messageText,
-            onValueChange = onTextChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text("Type a message...") },
-            shape = RoundedCornerShape(24.dp),
-            maxLines = 4
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        FloatingActionButton(
-            onClick = onSendClick,
-            containerColor = MaterialTheme.colorScheme.primary,
-            shape = CircleShape,
-            modifier = Modifier.size(50.dp)
-        ) {
-            if (isSending) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-            } else {
-                Icon(Icons.Default.Send, contentDescription = "Send", tint = Color.White)
-            }
-        }
-    }
-}
-
-@Composable
-fun TypingIndicator(typingUsers: Map<Long, String>) {
-    val typingText = when {
-        typingUsers.isEmpty() -> ""
-        typingUsers.size == 1 -> "${typingUsers.values.first()} is typing..."
-        typingUsers.size == 2 -> "${typingUsers.values.first()} and ${typingUsers.values.last()} are typing..."
-        else -> "${typingUsers.size} people are typing..."
-    }
-
-    if (typingText.isNotEmpty()) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.CenterStart
+                .navigationBarsPadding()
+                .padding(5.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            OutlinedTextField(
+                value = messageText,
+                onValueChange = onTextChange,
+                modifier = Modifier.weight(1f).height(53.dp),
+                placeholder = { Text("message...") },
+                shape = RoundedCornerShape(24.dp),
+                maxLines = 4
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            FloatingActionButton(
+                onClick = onSendClick,
+                containerColor = Color.Black.copy(0.8f),
+                shape = CircleShape,
+                modifier = Modifier.size(50.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(12.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = typingText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (isSending) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                } else {
+                    Icon(Icons.Filled.Send, contentDescription = "Send", tint = Color.White)
                 }
             }
         }
