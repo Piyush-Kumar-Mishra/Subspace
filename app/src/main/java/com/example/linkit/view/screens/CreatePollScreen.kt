@@ -7,14 +7,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.linkit.view.components.LoadingIndicator
 import com.example.linkit.viewmodel.PollViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,12 +37,8 @@ fun CreatePollScreen(
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { viewModel.createPoll(projectId) }) {
-                Icon(Icons.Default.Send, contentDescription = "Create Poll")
-            }
         }
+
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -98,6 +95,21 @@ fun CreatePollScreen(
                         checked = pollState.allowMultipleAnswers,
                         onCheckedChange = { viewModel.onAllowMultipleAnswersChanged(it) }
                     )
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = { viewModel.createPoll(projectId) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !pollState.isLoading
+                ) {
+                    if (pollState.isLoading) {
+                        LoadingIndicator()
+                    } else {
+                        Text("Create Poll", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
