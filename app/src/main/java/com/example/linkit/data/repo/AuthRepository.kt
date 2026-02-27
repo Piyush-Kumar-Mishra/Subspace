@@ -5,7 +5,8 @@ import com.example.linkit.data.TokenStore
 import com.example.linkit.data.models.auth_models.LoginRequest
 import com.example.linkit.data.models.auth_models.RegisterRequest
 import com.example.linkit.data.models.auth_models.RegisterResponse
-import com.example.linkit.data.models.TokenResponse
+import com.example.linkit.data.models.auth_models.TokenResponse
+import com.example.linkit.util.JwtUtils
 import com.example.linkit.util.NetworkResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -19,6 +20,8 @@ class AuthRepository @Inject constructor(
     fun getToken(): Flow<String?> = tokenStore.token
 
     fun getUserId(): Flow<Long?> = tokenStore.userId
+
+    fun isProfileCompletedLocally(): Flow<Boolean> = tokenStore.isProfileCompleted
 
     fun register(email: String, username: String, password: String): Flow<NetworkResult<RegisterResponse>> = flow {
 
@@ -54,6 +57,12 @@ class AuthRepository @Inject constructor(
                 val body = response.body()
                 if (body != null) {
                     tokenStore.saveToken(body.token)
+
+                    val userId = JwtUtils.getUserIdFromToken(body.token)
+                    if (userId != null) {
+                        tokenStore.saveUserId(userId)
+                    }
+                    
                     emit(NetworkResult.Success(body))
                 }
 
@@ -74,6 +83,10 @@ class AuthRepository @Inject constructor(
         catch (e: Exception) {
             emit(NetworkResult.Error("Network error: ${e.localizedMessage}"))
         }
+    }
+
+    suspend fun saveProfileStatus(isCompleted: Boolean) {
+        tokenStore.saveProfileStatus(isCompleted)
     }
 
     suspend fun clearToken() = tokenStore.clearToken()
