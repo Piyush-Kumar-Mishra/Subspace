@@ -14,13 +14,15 @@ class AuthInterceptor @Inject constructor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
+        if (originalRequest.header("No-Authentication") != null) {
+            return chain.proceed(originalRequest.newBuilder().removeHeader("No-Authentication").build())
+        }
+
         // Skip auth for login/register endpoints
         val url = originalRequest.url.toString()
         if (url.contains("/api/auth/")) {
             return chain.proceed(originalRequest)
         }
-
-        // Get token synchronously (blocking call in interceptor context)
         val token = runBlocking {
             try {
                 tokenStore.token.first()
@@ -30,7 +32,6 @@ class AuthInterceptor @Inject constructor(
             }
         }
 
-        // Add Authorization header if token exists
         val newRequest = if (token != null) {
             originalRequest.newBuilder()
                 .addHeader("Authorization", "Bearer $token")
@@ -42,15 +43,12 @@ class AuthInterceptor @Inject constructor(
 
         val response = chain.proceed(newRequest)
 
-        // Handle token expiration globally
         if (response.code == 401 || response.code == 403) {
-            // Token expired/invalid, clear it
             runBlocking {
                 try {
                     tokenStore.clearToken()
                 }
                 catch (e: Exception) {
-
                 }
             }
         }

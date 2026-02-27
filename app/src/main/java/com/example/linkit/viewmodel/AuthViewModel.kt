@@ -15,13 +15,18 @@ import javax.inject.Inject
 
 data class AuthUiState(
     val email: String = "",
+    val emailError: String? = null,
     val username: String = "",
+    val usernameError: String? = null,
     val password: String = "",
     val isLoginMode: Boolean = true,
     val isLoading: Boolean = false,
     val isOffline: Boolean = false,
     val offlineMessage: String = ""
 )
+
+private val EMAIL_REGEX = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$".toRegex()
+private val USERNAME_START_REGEX = "^[^0-9].*".toRegex()
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
@@ -37,12 +42,11 @@ class AuthViewModel @Inject constructor(
     val uiEvent = _uiEvent.asSharedFlow()
 
     init {
-        // React automatically to network changes
         viewModelScope.launch {
             networkUtils.networkStatus.collect { isOnline ->
                 _uiState.value = _uiState.value.copy(
                     isOffline = !isOnline,
-                    offlineMessage = if (!isOnline) "You are offline. Internet connection required." else ""
+                    offlineMessage = if (!isOnline) "You are offline" else ""
                 )
             }
         }
@@ -62,6 +66,8 @@ class AuthViewModel @Inject constructor(
                             profileRepository.getProfileStatus().collectLatest { result ->
                                 when (result) {
                                     is NetworkResult.Success -> {
+                                        authRepository.saveProfileStatus(result.data.profileCompleted)
+
                                         if (result.data.profileCompleted) {
                                             _uiEvent.emit(UiEvent.NavigateToMain)
                                         } else {
@@ -73,28 +79,14 @@ class AuthViewModel @Inject constructor(
                                             authRepository.clearToken()
                                             _uiEvent.emit(UiEvent.NavigateToAuth)
                                         } else {
-                                            _uiEvent.emit(UiEvent.NavigateToEnterDetails)
+                                            _uiEvent.emit(UiEvent.NavigateToAuth)
                                         }
                                     }
                                     else -> Unit
                                 }
                             }
                         } else {
-                            profileRepository.getProfileStatus().collectLatest { result ->
-                                when (result) {
-                                    is NetworkResult.Success -> {
-                                        if (result.data.profileCompleted) {
-                                            _uiEvent.emit(UiEvent.NavigateToMain)
-                                        } else {
-                                            _uiEvent.emit(UiEvent.NavigateToEnterDetails)
-                                        }
-                                    }
-                                    is NetworkResult.Error -> {
-                                        _uiEvent.emit(UiEvent.NavigateToMain)
-                                    }
-                                    else -> Unit
-                                }
-                            }
+                            checkLocalStatus()
                         }
                     }
                 } else {
@@ -124,15 +116,21 @@ class AuthViewModel @Inject constructor(
     }
 
     fun toggleMode() {
-        _uiState.value = _uiState.value.copy(isLoginMode = !_uiState.value.isLoginMode)
+        _uiState.value = _uiState.value.copy(
+            isLoginMode = !_uiState.value.isLoginMode,
+            emailError = null,
+            usernameError = null,
+        )
     }
 
     fun onEmailChange(email: String) {
-        _uiState.value = _uiState.value.copy(email = email)
+        val error = if (email.matches(EMAIL_REGEX) || email.isBlank()) null else _uiState.value.emailError
+        _uiState.value = _uiState.value.copy(email = email, emailError = error)
     }
 
     fun onUsernameChanged(username: String) {
-        _uiState.value = _uiState.value.copy(username = username)
+        val error = if (username.length > 5 && username.isNotEmpty() && !username.first().isDigit()) null else _uiState.value.usernameError
+        _uiState.value = _uiState.value.copy(username = username, usernameError = error)
     }
 
     fun onPasswordChanged(password: String) {
@@ -143,24 +141,34 @@ class AuthViewModel @Inject constructor(
         val state = _uiState.value
 
         if (state.isOffline) {
-            viewModelScope.launch {
-                _uiEvent.emit(UiEvent.ShowToast("Internet connection required"))
-            }
+            viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("Internet connection required")) }
             return
         }
 
         if (state.username.isBlank() || state.password.isBlank()) {
-            viewModelScope.launch {
-                _uiEvent.emit(UiEvent.ShowToast("Please enter both username and password"))
-            }
+            _uiState.value = state.copy(
+                usernameError = if(state.username.isBlank()) "Required" else null
+            )
             return
         }
 
-        if (!state.isLoginMode && state.email.isBlank()) {
-            viewModelScope.launch {
-                _uiEvent.emit(UiEvent.ShowToast("Please enter a valid email for sign up"))
+        // SignUp Specific Validations
+        if (!state.isLoginMode) {
+            val emailValid = state.email.matches(EMAIL_REGEX)
+            val userLenValid = state.username.length > 5
+            val userStartValid = state.username.isNotEmpty() && !state.username.first().isDigit()
+
+            if (!emailValid || !userLenValid || !userStartValid) {
+                _uiState.value = state.copy(
+                    emailError = if (!emailValid) "Invalid email format" else null,
+                    usernameError = when {
+                        !userLenValid -> "Must be more than 5 characters"
+                        !userStartValid -> "Cannot start with a number"
+                        else -> null
+                    }
+                )
+                return
             }
-            return
         }
 
         _uiState.value = _uiState.value.copy(isLoading = true)
@@ -195,7 +203,7 @@ class AuthViewModel @Inject constructor(
                     }
                     is NetworkResult.Error -> {
                         _uiState.value = state.copy(isLoading = false)
-                        _uiEvent.emit(UiEvent.ShowToast(networkResult.message))
+                        _uiEvent.emit(UiEvent.ShowToast("Enter Correct Credentials"))
                     }
                 }
             }
@@ -227,15 +235,17 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun clearAllState() {
-        _uiState.value = AuthUiState(isOffline = _uiState.value.isOffline)
+    private suspend fun checkLocalStatus() {
+        authRepository.isProfileCompletedLocally().collectLatest { completed ->
+            if (completed) {
+                _uiEvent.emit(UiEvent.NavigateToMain)
+            } else {
+                _uiEvent.emit(UiEvent.NavigateToEnterDetails)
+            }
+        }
     }
 
-    fun logout() {
-        viewModelScope.launch {
-            clearAllState()
-            authRepository.clearToken()
-            _uiEvent.emit(UiEvent.NavigateToGetStarted)
-        }
+    fun clearAllState() {
+        _uiState.value = AuthUiState(isOffline = _uiState.value.isOffline)
     }
 }
