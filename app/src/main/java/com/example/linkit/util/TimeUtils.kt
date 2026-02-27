@@ -38,12 +38,26 @@ object TimeUtils {
         return Instant.now().toString()
     }
 
-    fun formatProjectDate(date: String?): String {
+    fun formatProjectDate(dateString: String?): String {
+        if (dateString.isNullOrBlank()) return ""
+
         return try {
-            LocalDate.parse(date?.take(10))
-                .format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+            // 1. Parse the full ISO string (e.g., "2026-01-21T20:30:00Z")
+            val instant = Instant.parse(dateString)
+
+            // 2. Convert to User's Local Timezone (e.g., "2026-01-22...")
+            val localDate = instant.atZone(ZoneId.systemDefault()).toLocalDate()
+
+            // 3. Format correctly
+            localDate.format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
         } catch (e: Exception) {
-            ""
+            // If it's just a plain date string like "2026-01-22"
+            try {
+                LocalDate.parse(dateString.take(10))
+                    .format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+            } catch (e2: Exception) {
+                ""
+            }
         }
     }
 
