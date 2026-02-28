@@ -7,7 +7,6 @@ import com.example.linkit.data.local.dao.UserDao
 import com.example.linkit.data.local.entities.ConnectionEntity
 import com.example.linkit.data.local.entities.UserEntity
 import com.example.linkit.data.models.*
-import com.example.linkit.util.ImageCacheManager
 import com.example.linkit.util.JwtUtils
 import com.example.linkit.util.NetworkResult
 import com.example.linkit.util.NetworkUtils
@@ -21,8 +20,7 @@ class ProfileRepository @Inject constructor(
     private val tokenStore: TokenStore,
     private val userDao: UserDao,
     private val connectionDao: ConnectionDao,
-    private val networkUtils: NetworkUtils,
-    private val imageCacheManager: ImageCacheManager
+    private val networkUtils: NetworkUtils
 ) {
 
     fun createProfile(request: CreateProfileRequest): Flow<NetworkResult<ProfileResponse>> = flow {
@@ -31,12 +29,10 @@ class ProfileRepository @Inject constructor(
             val token = tokenStore.token.first()
             if (token != null && !JwtUtils.isTokenExpired(token)) {
                 if (networkUtils.isInternetAvailable()) {
-                    // Online: Create profile on server
                     val response = api.createProfile(request)
 
                     if (response.isSuccessful) {
                         response.body()?.let { profileResponse ->
-                            // Cache profile data locally
                             cacheUserProfile(profileResponse, token)
                             emit(NetworkResult.Success(profileResponse))
                         } ?: emit(NetworkResult.Error("Empty response"))
@@ -68,18 +64,15 @@ class ProfileRepository @Inject constructor(
                 val userId = JwtUtils.getUserIdFromToken(token)
 
                 if (networkUtils.isInternetAvailable()) {
-                    // Online, Fetch data from server
                     try {
                         val response = api.getUserProfile()
                         if (response.isSuccessful) {
                             response.body()?.let { profileResponse ->
-                                // Cache fresh data locally
                                 cacheUserProfile(profileResponse, token)
                                 emit(NetworkResult.Success(profileResponse))
                             } ?: emit(NetworkResult.Error("Empty response"))
                         }
                         else {
-                            // Server error, fallback to cached data
                             userId?.let { id ->
                                 val cachedProfile = getCachedProfile(id)
                                 if (cachedProfile != null) {
@@ -96,7 +89,6 @@ class ProfileRepository @Inject constructor(
                         }
                     }
                     catch (e: Exception) {
-                        // Network error, fallback to cached data
                         userId?.let { id ->
                             val cachedProfile = getCachedProfile(id)
                             if (cachedProfile != null) {
@@ -109,7 +101,6 @@ class ProfileRepository @Inject constructor(
                     }
                 }
                 else {
-                    // Offline: Use cached data
                     userId?.let { id ->
                         val cachedProfile = getCachedProfile(id)
                         if (cachedProfile != null) {
@@ -136,7 +127,6 @@ class ProfileRepository @Inject constructor(
             val token = tokenStore.token.first()
             if (token != null && !JwtUtils.isTokenExpired(token)) {
                 if (networkUtils.isInternetAvailable()) {
-                    // Online, Update on server
                     val response = api.updateProfile(request)
                     if (response.isSuccessful) {
                         response.body()?.let { profileResponse ->
@@ -183,7 +173,6 @@ class ProfileRepository @Inject constructor(
                     }
                 }
                 else {
-                    // Offline: Check if we have cached profile
                     val userId = JwtUtils.getUserIdFromToken(token)
                     userId?.let { id ->
                         val cachedUser = userDao.getUserById(id)
@@ -209,12 +198,10 @@ class ProfileRepository @Inject constructor(
                 val userId = JwtUtils.getUserIdFromToken(token)
 
                 if (networkUtils.isInternetAvailable()) {
-                    // Online, Fetch fresh connections
                     try {
                         val response = api.getConnections()
                         if (response.isSuccessful) {
                             response.body()?.let { connectionsResponse ->
-                                // Cache connections locally
                                 userId?.let { id ->
                                     cacheConnections(
                                         id,
@@ -225,7 +212,6 @@ class ProfileRepository @Inject constructor(
                             } ?: emit(NetworkResult.Error("Empty response"))
                         }
                         else {
-                            // Server error, fallback to cached data
                             userId?.let { id ->
                                 val cachedConnections = getCachedConnections(id)
                                 emit(NetworkResult.Success(ConnectionsResponse(cachedConnections)))
@@ -233,7 +219,6 @@ class ProfileRepository @Inject constructor(
                         }
                     }
                     catch (e: Exception) {
-                        // Network error, fallback to cached data
                         userId?.let { id ->
                             val cachedConnections = getCachedConnections(id)
                             emit(NetworkResult.Success(ConnectionsResponse(cachedConnections)))
@@ -241,7 +226,6 @@ class ProfileRepository @Inject constructor(
                     }
                 }
                 else {
-                    // Offline, Use cached connections
                     userId?.let { id ->
                         val cachedConnections = getCachedConnections(id)
                         emit(NetworkResult.Success(ConnectionsResponse(cachedConnections)))
@@ -263,7 +247,6 @@ class ProfileRepository @Inject constructor(
             val token = tokenStore.token.first()
             if (token != null && !JwtUtils.isTokenExpired(token)) {
                 if (networkUtils.isInternetAvailable()) {
-                    // Online, Search on server
                     val response = api.searchUsers(query)
                     if (response.isSuccessful) {
                         response.body()?.let { emit(NetworkResult.Success(it)) }
@@ -294,7 +277,6 @@ class ProfileRepository @Inject constructor(
             val token = tokenStore.token.first()
             if (token != null && !JwtUtils.isTokenExpired(token)) {
                 if (networkUtils.isInternetAvailable()) {
-                    // Online, Add connection on server
                     val response = api.addConnection(AddConnectionRequest(email))
                     if (response.isSuccessful) {
                         emit(NetworkResult.Success(Unit))
@@ -318,6 +300,133 @@ class ProfileRepository @Inject constructor(
         }
     }
 
+    fun getPendingRequests(): Flow<NetworkResult<List<UserConnection>>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && !JwtUtils.isTokenExpired(token)) {
+                if (networkUtils.isInternetAvailable()) {
+                    val response = api.getPendingRequests()
+                    if (response.isSuccessful) {
+                        emit(NetworkResult.Success(response.body() ?: emptyList()))
+                    } else {
+                        val errorMsg =
+                            getErrorMessage(response.code(), response.errorBody()?.string())
+                        emit(NetworkResult.Error(errorMsg))
+                    }
+                } else {
+                    emit(NetworkResult.Error("No internet connection. Cannot load requests."))
+                }
+            } else {
+                emit(NetworkResult.Error("Token not found or expired"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Network error: ${e.message}"))
+        }
+    }
+
+    fun acceptRequest(requestId: Long): Flow<NetworkResult<Unit>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && !JwtUtils.isTokenExpired(token)) {
+                if (networkUtils.isInternetAvailable()) {
+                    val response = api.acceptRequest(requestId)
+                    if (response.isSuccessful) {
+                        emit(NetworkResult.Success(Unit))
+                    } else {
+                        val errorMsg =
+                            getErrorMessage(response.code(), response.errorBody()?.string())
+                        emit(NetworkResult.Error(errorMsg))
+                    }
+                } else {
+                    emit(NetworkResult.Error("No internet connection"))
+                }
+            } else {
+                emit(NetworkResult.Error("Token not found or expired"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Network error: ${e.message}"))
+        }
+    }
+
+    fun rejectRequest(requestId: Long): Flow<NetworkResult<Unit>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && !JwtUtils.isTokenExpired(token)) {
+                if (networkUtils.isInternetAvailable()) {
+                    val response = api.rejectRequest(requestId)
+                    if (response.isSuccessful) {
+                        emit(NetworkResult.Success(Unit))
+                    } else {
+                        val errorMsg =
+                            getErrorMessage(response.code(), response.errorBody()?.string())
+                        emit(NetworkResult.Error(errorMsg))
+                    }
+                } else {
+                    emit(NetworkResult.Error("No internet connection"))
+                }
+            } else {
+                emit(NetworkResult.Error("Token not found or expired"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Network error: ${e.message}"))
+        }
+    }
+
+    fun removeConnection(userId: Long): Flow<NetworkResult<Unit>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && !JwtUtils.isTokenExpired(token)) {
+                if (networkUtils.isInternetAvailable()) {
+                    val response = api.removeConnection(userId)
+                    if (response.isSuccessful) {
+                        emit(NetworkResult.Success(Unit))
+                    } else {
+                        val errorMsg =
+                            getErrorMessage(response.code(), response.errorBody()?.string())
+                        emit(NetworkResult.Error(errorMsg))
+                    }
+                } else {
+                    emit(NetworkResult.Error("No internet connection"))
+                }
+            } else {
+                emit(NetworkResult.Error("Token not found or expired"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Network error: ${e.message}"))
+        }
+    }
+
+    fun blockUser(userId: Long): Flow<NetworkResult<Unit>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && !JwtUtils.isTokenExpired(token)) {
+                if (networkUtils.isInternetAvailable()) {
+                    val response = api.blockUser(userId)
+                    if (response.isSuccessful) {
+                        emit(NetworkResult.Success(Unit))
+                    } else {
+                        val errorMsg =
+                            getErrorMessage(response.code(), response.errorBody()?.string())
+                        emit(NetworkResult.Error(errorMsg))
+                    }
+                } else {
+                    emit(NetworkResult.Error("No internet connection"))
+                }
+            } else {
+                emit(NetworkResult.Error("Token not found or expired"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error("Network error: ${e.message}"))
+        }
+    }
+
+
+
     private suspend fun getCachedProfile(userId: Long): ProfileResponse? {
         return try {
             val userEntity = userDao.getUserById(userId)
@@ -340,13 +449,6 @@ class ProfileRepository @Inject constructor(
     private suspend fun cacheConnections(userId: Long, connections: List<ConnectionResponse>) {
         try {
             val connectionEntities = connections.map { connection ->
-                // Cache connection profile image if exists
-                var localImagePath: String? = null
-                connection.profileImageUrl?.let { imageUrl ->
-                    val fileName =
-                        "connection_${connection.userId}_${System.currentTimeMillis()}.jpg"
-                    localImagePath = imageCacheManager.downloadAndCacheImage(imageUrl, fileName)
-                }
 
                 ConnectionEntity(
                     connectionId = "${userId}_${connection.userId}",
@@ -354,19 +456,13 @@ class ProfileRepository @Inject constructor(
                     connectedUserId = connection.userId,
                     name = connection.name,
                     company = connection.company,
-                    profileImageUrl = connection.profileImageUrl,
-                    profileImageLocalPath = localImagePath
+                    profileImageUrl = connection.profileImageUrl
                 )
             }
-
-            // Clear old connections and insert new ones
             connectionDao.clearConnectionsForUser(userId)
             connectionDao.insertConnections(connectionEntities)
-        }
-        catch (e: Exception) {
-        }
+        } catch (e: Exception) { }
     }
-
 
     private suspend fun getCachedConnections(userId: Long): List<ConnectionResponse> {
         return try {
@@ -449,37 +545,45 @@ class ProfileRepository @Inject constructor(
     private suspend fun cacheUserProfile(profileResponse: ProfileResponse, token: String?) {
         try {
             val userId = profileResponse.userId
-
-            if (token != null) {
-                tokenStore.saveUserId(userId)
-            }
-
-
             val email = if (token != null) JwtUtils.getEmailFromToken(token) ?: "" else ""
-
-            var localImagePath: String? = null
-            profileResponse.profileImageUrl?.let { imageUrl ->
-                val fileName = "profile_${userId}_${System.currentTimeMillis()}.jpg"
-                localImagePath = imageCacheManager.downloadAndCacheImage(imageUrl, fileName)
-            }
 
             val userEntity = UserEntity(
                 userId = userId,
                 email = email,
-                username = "", // This field is not in the ProfileResponse
+                username = "",
                 name = profileResponse.name ?: "",
                 jobTitle = profileResponse.jobTitle,
                 company = profileResponse.company,
                 aboutMe = profileResponse.aboutMe,
                 profileImageUrl = profileResponse.profileImageUrl,
-                profileImageLocalPath = localImagePath,
                 isProfileCompleted = true
             )
-
             userDao.insertUser(userEntity)
-        }
-        catch (e: Exception) {
+        } catch (e: Exception) { }
+    }
 
+    fun deleteAccount(): Flow<NetworkResult<Unit>> = flow {
+        emit(NetworkResult.Loading())
+        try {
+            val token = tokenStore.token.first()
+            if (token != null && !JwtUtils.isTokenExpired(token)) {
+                val response = api.deleteAccount()
+                if (response.isSuccessful) {
+                    val userId = JwtUtils.getUserIdFromToken(token)
+                    userId?.let {
+                        userDao.deleteUser(it)
+                        connectionDao.clearConnectionsForUser(it)
+                    }
+                    tokenStore.clearToken()
+                    emit(NetworkResult.Success(Unit))
+                } else {
+                    emit(NetworkResult.Error("Failed to delete account: ${response.code()}"))
+                }
+            } else {
+                emit(NetworkResult.Error("Session expired"))
+            }
+        } catch (e: Exception) {
+            emit(NetworkResult.Error(e.message ?: "Unknown error"))
         }
     }
 }

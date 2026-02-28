@@ -14,7 +14,6 @@ data class UserEntity(
     val company: String?,
     val aboutMe: String?,
     val profileImageUrl: String?,
-    val profileImageLocalPath: String?, // Local cached image path
     val lastUpdated: Long = System.currentTimeMillis(),
     val isProfileCompleted: Boolean = true
 )

@@ -3,6 +3,7 @@ package com.example.linkit.viewmodel
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.linkit.data.TokenStore
 import com.example.linkit.data.models.*
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ProfileRepository
@@ -18,6 +19,7 @@ import javax.inject.Inject
 
 data class ProfileUiState(
     val name: String = "",
+    val userId: Long = 0L,
     val jobTitle: String = "",
     val company: String = "",
     val aboutMe: String = "",
@@ -26,6 +28,7 @@ data class ProfileUiState(
     val searchQuery: String = "",
     val searchResults: List<UserSearchResult> = emptyList(),
     val connections: List<ConnectionResponse> = emptyList(),
+    val pendingRequests: List<UserConnection> = emptyList(),
     val selectedTab: Int = 0,
     val isOffline: Boolean = false,
     val offlineMessage: String = ""
@@ -41,7 +44,8 @@ data class ViewedProfileState(
 class ProfileViewModel @Inject constructor(
     private val profileRepo: ProfileRepository,
     private val authRepository: AuthRepository,
-    private val networkUtils: NetworkUtils
+    private val networkUtils: NetworkUtils,
+    private val tokenStore: TokenStore
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -66,7 +70,7 @@ class ProfileViewModel @Inject constructor(
             networkUtils.networkStatus.collect { isOnline ->
                 _uiState.value = _uiState.value.copy(
                     isOffline = !isOnline,
-                    offlineMessage = if (!isOnline) "You are offline" else "You are offline"
+                    offlineMessage = if (!isOnline) "You are offline" else ""
                 )
             }
         }
@@ -103,6 +107,7 @@ class ProfileViewModel @Inject constructor(
         loadToken()
         loadProfile()
         loadConnections()
+        loadPendingRequests()
     }
 
     private fun loadProfile() {
@@ -114,6 +119,7 @@ class ProfileViewModel @Inject constructor(
                     when (result) {
                         is NetworkResult.Success -> {
                             _uiState.value = _uiState.value.copy(
+                                userId = result.data.userId,
                                 name = result.data.name,
                                 jobTitle = result.data.jobTitle ?: "",
                                 company = result.data.company ?: "",
@@ -153,6 +159,100 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun loadPendingRequests() {
+        viewModelScope.launch {
+            profileRepo.getPendingRequests().collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiState.value = _uiState.value.copy(
+                            pendingRequests = result.data
+                        )
+                    }
+                    is NetworkResult.Error -> {
+                        if (isTokenExpiredError(result.message)) {
+                            authRepository.clearToken()
+                            _uiEvent.emit(UiEvent.ShowToast("Session expired. Please log in again."))
+                            _uiEvent.emit(UiEvent.NavigateToAuth)
+                        } else {
+                            _uiEvent.emit(UiEvent.ShowToast(result.message))
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun acceptRequest(requestId: Long) {
+        viewModelScope.launch {
+            profileRepo.acceptRequest(requestId).collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Request accepted"))
+                        loadConnections()
+                        loadPendingRequests()
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun rejectRequest(requestId: Long) {
+        viewModelScope.launch {
+            profileRepo.rejectRequest(requestId).collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Request rejected"))
+                        loadPendingRequests()
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun removeConnection(userId: Long) {
+        viewModelScope.launch {
+            profileRepo.removeConnection(userId).collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Connection removed"))
+                        loadConnections()
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun blockUser(userId: Long) {
+        viewModelScope.launch {
+            profileRepo.blockUser(userId).collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("User blocked"))
+                        loadConnections()
+                        loadPendingRequests()
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
     fun createProfile() {
         val state = _uiState.value
         if (state.name.isBlank()) {
@@ -169,13 +269,16 @@ class ProfileViewModel @Inject constructor(
                 jobTitle = state.jobTitle.takeIf { it.isNotBlank() },
                 company = state.company.takeIf { it.isNotBlank() },
                 aboutMe = state.aboutMe.takeIf { it.isNotBlank() },
-                profileImageBase64 = imageBase64
+                profileImage = imageBase64
             )
 
             profileRepo.createProfile(request).collect { result ->
                 _uiState.value = state.copy(isLoading = false)
                 when (result) {
-                    is NetworkResult.Success -> _uiEvent.emit(UiEvent.NavigateToMain)
+                    is NetworkResult.Success -> {
+                        tokenStore.saveProfileStatus(true)
+                        _uiEvent.emit(UiEvent.NavigateToMain)
+                    }
                     is NetworkResult.Error -> {
                         if (isTokenExpiredError(result.message)) {
                             authRepository.clearToken()
@@ -207,7 +310,7 @@ class ProfileViewModel @Inject constructor(
                 jobTitle = state.jobTitle.takeIf { it.isNotBlank() },
                 company = state.company.takeIf { it.isNotBlank() },
                 aboutMe = state.aboutMe.takeIf { it.isNotBlank() },
-                profileImageBase64 = imageBase64
+                profileImage = imageBase64
             )
 
             profileRepo.updateProfile(request).collect { result ->
@@ -282,12 +385,30 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    fun onNameChanged(name: String) { _uiState.value = _uiState.value.copy(name = name) }
-    fun onJobTitleChanged(jobTitle: String) { _uiState.value = _uiState.value.copy(jobTitle = jobTitle) }
-    fun onCompanyChanged(company: String) { _uiState.value = _uiState.value.copy(company = company) }
-    fun onAboutMeChanged(aboutMe: String) { _uiState.value = _uiState.value.copy(aboutMe = aboutMe) }
-    fun onImageSelected(bitmap: Bitmap) { _uiState.value = _uiState.value.copy(profileImageBitmap = bitmap) }
-    fun onTabSelected(tabIndex: Int) { _uiState.value = _uiState.value.copy(selectedTab = tabIndex) }
+    fun onNameChanged(name: String) { if (name.length <= 24) {
+        _uiState.value = _uiState.value.copy(name = name)
+    }
+    }
+    fun onJobTitleChanged(jobTitle: String) {
+        if (jobTitle.length <= 20) {
+            _uiState.value = _uiState.value.copy(jobTitle = jobTitle)
+        }
+    }
+    fun onCompanyChanged(company: String) {
+        if (company.length <= 20) {
+            _uiState.value = _uiState.value.copy(company = company)
+        }
+    }
+    fun onAboutMeChanged(aboutMe: String) {
+        val words = aboutMe.trim().split("\\s+".toRegex()).filter { it.isNotEmpty() }
+
+        if (words.size <= 400) {
+            _uiState.value = _uiState.value.copy(aboutMe = aboutMe)
+        }
+    }
+    fun onImageSelected(bitmap: Bitmap) {
+        _uiState.value = _uiState.value.copy(profileImageBitmap = bitmap)
+    }
 
     fun logout() {
         viewModelScope.launch {
@@ -339,4 +460,20 @@ class ProfileViewModel @Inject constructor(
         _viewedProfileState.value = ViewedProfileState()
     }
 
+    fun deleteAccount() {
+        viewModelScope.launch {
+            profileRepo.deleteAccount().collect { result ->
+                when (result) {
+                    is NetworkResult.Success -> {
+                        _uiEvent.emit(UiEvent.ShowToast("Account deleted successfully"))
+                        _uiEvent.emit(UiEvent.NavigateToGetStarted)
+                    }
+                    is NetworkResult.Error -> {
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
 }

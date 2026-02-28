@@ -5,7 +5,7 @@ data class CreateProfileRequest(
     val jobTitle :String?=null,
     val company : String? = null,
     val aboutMe :String? = null,
-    val profileImageBase64: String? = null
+    val profileImage: String? = null
 )
 
 data class UpdateProfileRequest(
@@ -13,7 +13,7 @@ data class UpdateProfileRequest(
     val jobTitle: String? =null,
     val company: String? = null,
     val aboutMe: String? = null,
-    val profileImageBase64: String? = null
+    val profileImage: String? = null
 )
 
 data class ProfileResponse(
