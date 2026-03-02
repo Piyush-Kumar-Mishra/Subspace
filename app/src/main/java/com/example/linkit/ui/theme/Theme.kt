@@ -40,6 +40,15 @@ private val LightColorScheme = lightColorScheme(
 val AntonFontFamily = FontFamily(
     Font(R.font.anton_regular, FontWeight.Normal)
 )
+val odisansFamily = FontFamily(
+    Font(R.font.odisans_regular, FontWeight.Normal)
+)
+val matalmania = FontFamily(
+    Font(R.font.metalmania_regular, FontWeight.Normal)
+)
+val grenze_blackItalic = FontFamily(
+    Font(R.font.grenze_blackitalic, FontWeight.Normal)
+)
 
 @Composable
 fun LinkItTheme(

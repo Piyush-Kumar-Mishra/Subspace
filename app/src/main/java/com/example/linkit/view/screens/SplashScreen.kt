@@ -33,7 +33,7 @@ fun SplashScreen(viewModel: AuthViewModel) {
         contentAlignment = Alignment.Center
     ) {
         Image(
-            painter = painterResource(id = R.drawable.img3),
+            painter = painterResource(id = R.drawable.app_icon_logo),
             contentDescription = "App Logo",
             modifier = Modifier
                 .size(128.dp)
