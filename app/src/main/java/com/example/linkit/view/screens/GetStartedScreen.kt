@@ -37,13 +37,14 @@ import com.example.linkit.R
 import com.example.linkit.ui.theme.AntonFontFamily
 import com.example.linkit.ui.theme.bcg2
 import com.example.linkit.ui.theme.bcg5
+import com.example.linkit.ui.theme.odisansFamily
 
 @Composable
 fun GetStartedScreen(onGetStarted: () -> Unit) {
     Surface(
         modifier = Modifier
             .fillMaxSize()
-            .background(    //6073FBFF
+            .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(bcg2, bcg5),
                     startY = 10f,
@@ -55,7 +56,6 @@ fun GetStartedScreen(onGetStarted: () -> Unit) {
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            // Text + Button Column
             Column(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -66,15 +66,15 @@ fun GetStartedScreen(onGetStarted: () -> Unit) {
                 Box {
                     Text(
                         text = "Welcome to Subspace",
-                        fontFamily = AntonFontFamily,
-                        fontSize = 43.sp,
+                        fontFamily = odisansFamily,
+                        fontSize = 53.sp,
                         color = Color.Black,
-                        modifier = Modifier.offset(x = (-4).dp, y = 7.dp)
+                        modifier = Modifier.offset(x = (-3).dp, y = 6.dp)
                     )
                     Text(
                         text = "Welcome to Subspace",
-                        fontFamily = AntonFontFamily,
-                        fontSize = 43.sp,
+                        fontFamily = odisansFamily,
+                        fontSize = 53.sp,
                         color = Color.White
                     )
                 }
@@ -95,7 +95,8 @@ fun GetStartedScreen(onGetStarted: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Get Started",
-                            fontSize = 18.sp,
+                            fontSize = 24.sp,
+                            fontFamily = odisansFamily,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.width(8.dp))
