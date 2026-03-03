@@ -47,25 +47,34 @@ class PollViewModel @Inject constructor(
         }
     }
     fun onAllowMultipleAnswersChanged(isEnabled: Boolean) { _pollState.value = _pollState.value.copy(allowMultipleAnswers = isEnabled) }
+
     fun clearCreateForm() { _pollState.value = PollUiState() }
 
     fun createPoll(projectId: Long) {
-        viewModelScope.launch {
-            val state = _pollState.value
-            val validOptions = state.options.filter { it.isNotBlank() }
-            if (state.question.isBlank() || validOptions.size < 2) {
+        if (_pollState.value.isLoading) return
+
+        val state = _pollState.value
+        val validOptions = state.options.filter { it.isNotBlank() }
+        
+        if (state.question.isBlank() || validOptions.size < 2) {
+            viewModelScope.launch {
                 _uiEvent.emit(UiEvent.ShowToast("Question and at least two options are required."))
-                return@launch
             }
+            return
+        }
+
+        _pollState.value = _pollState.value.copy(isLoading = true)
+
+        viewModelScope.launch {
             val request = CreatePollRequest(state.question, validOptions, state.allowMultipleAnswers)
             pollRepository.createProjectPoll(projectId, request).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> _pollState.value = _pollState.value.copy(isLoading = true)
                     is NetworkResult.Success -> {
-                        _uiEvent.emit(UiEvent.ShowToast("Poll created!"))
                         _pollState.value = _pollState.value.copy(poll = result.data, isLoading = false)
-
+                        _uiEvent.emit(UiEvent.ShowToast("Poll created!"))
                         _uiEvent.emit(UiEvent.NavigateBack)
+                        clearCreateForm()
                     }
                     is NetworkResult.Error -> {
                         _pollState.value = _pollState.value.copy(isLoading = false)
