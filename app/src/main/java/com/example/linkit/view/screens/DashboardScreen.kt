@@ -12,6 +12,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Analytics
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -28,7 +30,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,20 +39,22 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.example.linkit.R
 import com.example.linkit.data.models.ProjectAssigneeResponse
 import com.example.linkit.data.models.ProjectResponse
-import com.example.linkit.util.Constants
-import com.example.linkit.util.UiEvent
 import com.example.linkit.viewmodel.ProjectFilter
 import com.example.linkit.viewmodel.ProjectViewModel
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.sp
+import com.example.linkit.ui.theme.AntonFontFamily
+import com.example.linkit.ui.theme.matalmania
+import com.example.linkit.ui.theme.odisansFamily
+import com.example.linkit.view.components.AuthorizedAsyncImage
+import com.example.linkit.view.components.BrushStrokeShape
 import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,48 +67,21 @@ fun DashboardScreen(
     onNavigateToAnalytics: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val snackbarHost = remember { SnackbarHostState() }
     val projectListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         viewModel.loadProjects()
-        viewModel.uiEvent.collectLatest { event ->
-            if (event is UiEvent.ShowToast) snackbarHost.showSnackbar(event.msg)
-        }
     }
-
-    Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHost) },
-        topBar = {
-            TopAppBar(
-                title = { Text("Subspace") },
-            )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToCreateProject,
-                shape = RoundedCornerShape(16.dp),
-                containerColor = Color.Black.copy(alpha = 0.8f),
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, null)
-            }
-        },
-        contentWindowInsets = WindowInsets(0)
-    ) { padding ->
-
         Column(
             Modifier
                 .fillMaxSize()
-                .padding(padding)
                 .background(Color.White)
         ) {
-
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF4F5F7))
+                    .background(Color.White)
             ) {
                 Calendar(
                     selectedDate = uiState.selectedDate,
@@ -152,6 +128,7 @@ fun DashboardScreen(
                     items(uiState.projects) { project ->
                         ProjectCard(
                             project = project,
+                            isOffline = uiState.isOffline,
                             onClick = {
                                 viewModel.selectProject(project)
                                 onNavigateToTaskScreen(project.id)
@@ -185,7 +162,6 @@ fun DashboardScreen(
             }
         }
     }
-}
 
 
 @OptIn(ExperimentalAnimationApi::class)
@@ -297,7 +273,7 @@ fun Calendar(
 
                         Surface(
                             modifier = Modifier
-                                .size(44.dp)
+                                .size(40.dp)
                                 .clickable {
                                     if (isSelected) onDateClicked(null)
                                     else onDateClicked(date)
@@ -329,7 +305,7 @@ fun Calendar(
                                 Modifier
                                     .size(6.dp)
                                     .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primary)
+                                    .background(Color.Red)
                             )
                         }
                     }
@@ -338,7 +314,6 @@ fun Calendar(
         }
     }
 }
-
 
 @Composable
 fun FilterChips(
@@ -353,10 +328,23 @@ fun FilterChips(
         ProjectFilter.LOW to "Low"
     )
 
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp)
+    ) {
         items(filters) { (filter, label) ->
-
             val sel = selected == filter
+
+            val chipShape = if (filter == ProjectFilter.ALL) {
+                BrushStrokeShape(
+                    brushSide = BrushStrokeShape.Side.Right,
+                    jaggedness = 30f,
+                    cornerRadius = 24f,
+                    variation = BrushStrokeShape.BrushVariation.WAVED
+                )
+            } else {
+                RoundedCornerShape(10.dp)
+            }
 
             FilterChip(
                 selected = sel,
@@ -365,43 +353,47 @@ fun FilterChips(
                     Text(
                         label,
                         fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                        color = if (sel)
-                            Color.White
-                        else
-                            Color.Black
-
+                        color = if (sel) Color.White else Color.Black,
+                        modifier = if (filter == ProjectFilter.ALL)
+                            Modifier.padding(end = 8.dp)
+                        else Modifier
                     )
                 },
-                shape = RoundedCornerShape(10.dp),
-
+                shape = chipShape,
                 colors = FilterChipDefaults.filterChipColors(
                     containerColor = Color.White,
                     labelColor = Color.Black,
                     selectedContainerColor = Color.Black.copy(alpha = 0.8f),
                     selectedLabelColor = Color.White
-                )
+                ),
+                border = if (!sel) FilterChipDefaults.filterChipBorder(
+                    enabled = true,
+                    selected = false,
+                    borderColor = Color.LightGray.copy(alpha = 0.5f)
+                ) else null
             )
         }
     }
 }
-
 @Composable
-fun UserAvatar(assignees: List<ProjectAssigneeResponse>) {
+fun UserAvatar(assignees: List<ProjectAssigneeResponse>, isOffline: Boolean) {
     val visible = assignees.take(3)
+
     Row(horizontalArrangement = Arrangement.spacedBy((-10).dp)) {
         visible.forEach { user ->
-            AsyncImage(
-                model = Constants.BASE_URL + (user.profileImageUrl ?: ""),
-                contentDescription = null,
+            AuthorizedAsyncImage(
+                imageUrl = user.profileImageUrl,
+                contentDescription = user.name,
+                isOffline = isOffline,
+                cacheKey = user.userId.toString(),
                 modifier = Modifier
                     .size(29.dp)
                     .clip(CircleShape)
                     .border(2.dp, Color.White, CircleShape)
-                    .background(Color.LightGray),
-                contentScale = ContentScale.Crop,
-                error = painterResource(R.drawable.ic_person)
+                    .background(Color.LightGray)
             )
         }
+
         if (assignees.size > 3) {
             Box(
                 modifier = Modifier
@@ -411,7 +403,11 @@ fun UserAvatar(assignees: List<ProjectAssigneeResponse>) {
                     .border(2.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
-                Text("+${assignees.size - 3}", style = MaterialTheme.typography.labelSmall, color = Color.White)
+                Text(
+                    text = "+${assignees.size - 3}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White
+                )
             }
         }
     }
@@ -420,6 +416,7 @@ fun UserAvatar(assignees: List<ProjectAssigneeResponse>) {
 @Composable
 fun ProjectCard(
     project: ProjectResponse,
+    isOffline: Boolean,
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onAnalytics: (Long) -> Unit
@@ -436,10 +433,12 @@ fun ProjectCard(
         else -> Color(0xFFFFE0B2) to Color(0xFFF57C00)
     }
 
+
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 19.dp, vertical = 10.dp)
+            .padding(horizontal = 19.dp, vertical = 0.dp)
             .height(IntrinsicSize.Min)
     ) {
 
@@ -528,12 +527,13 @@ fun ProjectCard(
                                     )
                                 }
                             }
-                            Spacer(Modifier.width(10.dp))
+                            Spacer(Modifier.width(8.dp))
                             Text(
                                 text = project.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
+                                fontFamily = AntonFontFamily,
+                                fontWeight = FontWeight.Thin,
                                 maxLines = 1,
+                                fontSize = 17.sp,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
                             )
@@ -543,11 +543,16 @@ fun ProjectCard(
 
                         Surface(
                             color = Color.Blue.copy(alpha = 0.2f),
-                            shape = RoundedCornerShape(8.dp),
+                            shape = BrushStrokeShape(
+                                brushSide = BrushStrokeShape.Side.Right,
+                                jaggedness = 30f,
+                                cornerRadius = 8f,
+                                variation = BrushStrokeShape.BrushVariation.WAVED
+                            ),
                         ) {
                             Text(
                                 text = project.priority.uppercase(),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(end = 16.dp, start = 5.dp, top = 4.dp, bottom = 4.dp),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold
                             )
@@ -602,11 +607,11 @@ fun ProjectCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
 
                             ) {
-                                project.tags.forEach { tag ->
+                                project.tags.forEach{ tag ->
                                     Surface(
                                         color = Color.Red.copy(alpha = 0.5f),
                                         shape = RoundedCornerShape(6.dp),
-                                        border = BorderStroke(1.dp, Color.Black)
+//                                        border = BorderStroke(1.dp, Color.Black)
                                     ) {
                                         Text(
                                             tag,
@@ -641,7 +646,7 @@ fun ProjectCard(
 
                 if (project.assignees.isNotEmpty()) {
                     Box(modifier = Modifier.scale(1.2f)) {
-                        UserAvatar(project.assignees)
+                        UserAvatar(project.assignees, isOffline = isOffline )
                     }
                 }
 
@@ -663,11 +668,25 @@ fun ProjectCard(
                     ) {
                         DropdownMenuItem(
                             text = { Text("Edit") },
-                            onClick = { onEdit(); showMenu = false }
+                            onClick = { onEdit(); showMenu = false },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Create,
+                                    contentDescription = ""
+                                )
+                            }
                         )
+                        HorizontalDivider()
+
                         DropdownMenuItem(
                             text = { Text("Analytics") },
-                            onClick = { onAnalytics(project.id); showMenu = false }
+                            onClick = { onAnalytics(project.id); showMenu = false },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Analytics,
+                                    contentDescription = ""
+                                )
+                            }
                         )
                     }
                 }
@@ -743,7 +762,7 @@ class TabbedCardShape(
 
         val path = androidx.compose.ui.graphics.Path().apply {
             moveTo(0f, radius)
-            quadraticBezierTo(0f, 0f, radius, 0f)
+            quadraticTo(0f, 0f, radius, 0f)
             lineTo(tabW, 0f)
             cubicTo(
                 tabW + radius, 0f,
@@ -751,11 +770,11 @@ class TabbedCardShape(
                 tabW + (radius * 2), cutH
             )
             lineTo(w - radius, cutH)
-            quadraticBezierTo(w, cutH, w, cutH + radius)
+            quadraticTo(w, cutH, w, cutH + radius)
             lineTo(w, h - radius)
-            quadraticBezierTo(w, h, w - radius, h)
+            quadraticTo(w, h, w - radius, h)
             lineTo(radius, h)
-            quadraticBezierTo(0f, h, 0f, h - radius)
+            quadraticTo(0f, h, 0f, h - radius)
             close()
         }
         return Outline.Generic(path)
