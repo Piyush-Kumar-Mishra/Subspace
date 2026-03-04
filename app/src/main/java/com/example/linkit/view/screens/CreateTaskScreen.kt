@@ -27,7 +27,6 @@ import coil.compose.AsyncImage
 import com.example.linkit.R
 import com.example.linkit.data.models.ProjectAssigneeResponse
 import com.example.linkit.data.models.TaskStatus
-import com.example.linkit.util.Constants
 import com.example.linkit.util.UiEvent
 import com.example.linkit.viewmodel.ProjectViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -139,7 +138,7 @@ fun CreateTaskScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        TaskStatus.values().forEach { status ->
+                        TaskStatus.entries.forEach { status ->
                             FilterChip(
                                 onClick = { viewModel.onTaskStatusChanged(status) },
                                 label = { Text(status.displayName) },
@@ -190,7 +189,7 @@ fun CreateTaskScreen(
                                 ) {
                                     if (!state.selectedAssignee!!.profileImageUrl.isNullOrBlank()) {
                                         AsyncImage(
-                                            model = "${Constants.BASE_URL}${state.selectedAssignee!!.profileImageUrl!!.removePrefix("/")}",
+                                            model = state.selectedAssignee!!.profileImageUrl,
                                             contentDescription = state.selectedAssignee!!.name,
                                             modifier = Modifier
                                                 .fillMaxSize()
@@ -345,7 +344,7 @@ private fun TaskAssigneeSelectionDialog(
                                 ) {
                                     if (!assignee.profileImageUrl.isNullOrBlank()) {
                                         AsyncImage(
-                                            model = "${Constants.BASE_URL}${assignee.profileImageUrl.removePrefix("/")}",
+                                            model = assignee.profileImageUrl,
                                             contentDescription = assignee.name,
                                             modifier = Modifier
                                                 .fillMaxSize()

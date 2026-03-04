@@ -1,6 +1,7 @@
 package com.example.linkit.view.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,14 +14,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.MoreTime
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -36,7 +40,10 @@ import com.example.linkit.data.models.ProjectPriority
 import com.example.linkit.data.models.UserSearchResult
 import com.example.linkit.util.Constants
 import com.example.linkit.util.UiEvent
+import com.example.linkit.view.components.AuthorizedAsyncImage
 import com.example.linkit.viewmodel.ProjectViewModel
+import com.google.firebase.annotations.concurrent.Background
+import com.patrykandpatrick.vico.core.common.DefaultColors
 import kotlinx.coroutines.flow.collectLatest
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -83,9 +90,17 @@ fun EditProjectScreen(
 
     if (state.showDatePicker) {
         CustomDatePickerDialog(
-            initialDate = state.startDate,
-            onDateSelected = { viewModel.onProjectStartDateChanged(it) },
+            initialDate = state.endDate,
+            onDateSelected = { viewModel.onProjectEndDateChanged(it) },
             onDismiss = { viewModel.toggleDatePicker() }
+        )
+    }
+
+    if (state.showTimePicker) {
+        TimePickerDialog(
+            initialTime = state.endTime,
+            onTimeSelected = { viewModel.onProjectEndTimeChanged(it) },
+            onDismiss = { viewModel.toggleTimePicker() }
         )
     }
 
@@ -134,23 +149,40 @@ fun EditProjectScreen(
             }
 
             item {
-                OutlinedTextField(
-                    value = state.startDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
-                    onValueChange = { },
-                    label = { Text("Start Date") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.toggleDatePicker() },
-                    enabled = false,
-                    trailingIcon = {
-                        Icon(Icons.Default.DateRange, contentDescription = "Select Date")
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OutlinedTextField(
+                        value = state.endDate.format(DateTimeFormatter.ofPattern("MMM dd, yyyy")),
+                        onValueChange = { },
+                        label = { Text("End Date") },
+                        modifier = Modifier.weight(1f).clickable { viewModel.toggleDatePicker() },
+                        enabled = false,
+                        trailingIcon = { Icon(Icons.Default.DateRange, null) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline
+                        )
                     )
-                )
+
+                    OutlinedTextField(
+                        value = state.endTime.format(DateTimeFormatter.ofPattern("hh:mm a")),
+                        onValueChange = { },
+                        label = { Text("End Time") },
+                        modifier = Modifier.weight(1f).clickable { viewModel.toggleTimePicker() },
+                        enabled = false,
+                        trailingIcon = { Icon(Icons.Filled.MoreTime, null) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                }
             }
+
 
             item {
                 Column {
@@ -164,7 +196,7 @@ fun EditProjectScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ProjectPriority.values().forEach { priority ->
+                        ProjectPriority.entries.forEach { priority ->
                             FilterChip(
                                 onClick = { viewModel.onProjectPriorityChanged(priority) },
                                 label = { Text(priority.displayName) },
@@ -191,9 +223,9 @@ fun EditProjectScreen(
                         TextButton(
                             onClick = { viewModel.toggleAssigneeDialog() }
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
+                            Icon(Icons.Default.Add, contentDescription = null ,tint= Color.Black.copy(0.8f))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Add")
+                            Text("Add", color= Color.Black.copy(0.8f))
                         }
                     }
 
@@ -277,7 +309,9 @@ fun EditProjectScreen(
                 Button(
                     onClick = { viewModel.updateProject() },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = !state.isLoading
+                    enabled = !state.isLoading,
+                    colors= ButtonDefaults.buttonColors(Color.Black.copy(0.8f))
+
                 ) {
                     if (state.isLoading) {
                         CircularProgressIndicator(
@@ -285,14 +319,13 @@ fun EditProjectScreen(
                             color = MaterialTheme.colorScheme.onPrimary
                         )
                     } else {
-                        Text("Save Changes")
+                        Text("Save Changes", color=Color.White)
                     }
                 }
             }
         }
     }
 }
-
 @Composable
 private fun AssigneeChip(
     assignee: ProjectAssigneeResponse,
@@ -312,15 +345,16 @@ private fun AssigneeChip(
                     .background(MaterialTheme.colorScheme.surface, CircleShape)
             ) {
                 if (!assignee.profileImageUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = "${Constants.BASE_URL}${assignee.profileImageUrl.removePrefix("/")}",
+                    AuthorizedAsyncImage(
+                        imageUrl = assignee.profileImageUrl,
                         contentDescription = assignee.name,
+                        cacheKey = assignee.userId.toString(),
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop,
-                        placeholder = painterResource(R.drawable.ic_person),
-                        error = painterResource(R.drawable.ic_person)
+                            .size(29.dp)
+                            .clip(CircleShape)
+                            .border(2.dp, Color.White, CircleShape)
+                            .background(Color.LightGray),
+                        contentScale = ContentScale.Crop
                     )
                 } else {
                     Icon(
@@ -409,7 +443,8 @@ private fun AssigneeSelectionDialog(
                 Text(
                     text = "Select Assignees",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black.copy(0.8f)
                 )
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -447,15 +482,16 @@ private fun AssigneeSelectionDialog(
                                         .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                                 ) {
                                     if (!assignee.profileImageUrl.isNullOrBlank()) {
-                                        AsyncImage(
-                                            model = "${Constants.BASE_URL}${assignee.profileImageUrl.removePrefix("/")}",
+
+                                        AuthorizedAsyncImage(
+                                            imageUrl = assignee.profileImageUrl,
                                             contentDescription = assignee.name,
+                                            cacheKey = assignee.userId.toString(),
                                             modifier = Modifier
-                                                .fillMaxSize()
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop,
-                                            placeholder = painterResource(R.drawable.ic_person),
-                                            error = painterResource(R.drawable.ic_person)
+                                                .size(29.dp)
+                                                .clip(CircleShape)
+                                                .border(2.dp, Color.White, CircleShape)
+                                                .background(Color.LightGray)
                                         )
                                     } else {
                                         Icon(
@@ -486,7 +522,7 @@ private fun AssigneeSelectionDialog(
                                 Spacer(modifier = Modifier.weight(1f))
                                 if (isSelected) {
                                     Icon(
-                                        painter = painterResource(R.drawable.ic_check),
+                                        Icons.Filled.Check,
                                         contentDescription = "Selected",
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -499,9 +535,10 @@ private fun AssigneeSelectionDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(Color.Black.copy(alpha = 0.8f))
                 ) {
-                    Text("Done")
+                    Text("Done", color = Color.White)
                 }
             }
         }
