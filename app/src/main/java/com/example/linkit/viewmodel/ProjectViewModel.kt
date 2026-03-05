@@ -1,6 +1,9 @@
 package com.example.linkit.viewmodel
 
+import android.content.Context
+import android.content.Intent
 import android.net.Uri
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.linkit.data.models.*
@@ -9,26 +12,27 @@ import com.example.linkit.data.repo.PollRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.data.repo.ProfileRepository
 import com.example.linkit.util.NetworkResult
+import com.example.linkit.util.NetworkUtils
 import com.example.linkit.util.UiEvent
-import com.example.linkit.view.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.YearMonth
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 
 data class ProjectUiState(
+    val isOffline: Boolean = false,
     val projects: List<ProjectResponse> = emptyList(),
     val isLoading: Boolean = false,
     val currentProject: ProjectResponse? = null,
@@ -56,7 +60,8 @@ enum class ProjectFilter {
 data class CreateProjectUiState(
     val name: String = "",
     val description: String = "",
-    val startDate: LocalDate = LocalDate.now(),
+    val endDate: LocalDate = LocalDate.now().plusDays(7), // Default deadline 1 week from now
+    val endTime: LocalTime = LocalTime.of(17, 0), // Default 5 PM
     val priority: ProjectPriority = ProjectPriority.MEDIUM,
     val selectedAssignees: List<ProjectAssigneeResponse> = emptyList(),
     val availableAssignees: List<UserSearchResult> = emptyList(),
@@ -64,7 +69,8 @@ data class CreateProjectUiState(
     val currentTag: String = "",
     val isLoading: Boolean = false,
     val showAssigneeDialog: Boolean = false,
-    val showDatePicker: Boolean = false
+    val showDatePicker: Boolean = false,
+    val showTimePicker: Boolean = false
 )
 
 data class TaskUiState(
@@ -88,7 +94,8 @@ class ProjectViewModel @Inject constructor(
     private val projectRepository: ProjectRepository,
     private val profileRepository: ProfileRepository,
     private val pollRepository: PollRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val networkUtils: NetworkUtils
 ) : ViewModel() {
 
 
@@ -107,6 +114,12 @@ class ProjectViewModel @Inject constructor(
     private val _editingProjectId = MutableStateFlow<Long?>(null)
 
     init {
+        viewModelScope.launch {
+            networkUtils.networkStatus.collect { isOnline ->
+                _uiState.update { it.copy(isOffline = !isOnline) }
+            }
+        }
+
         loadProjects()
         loadLoggedInUser()
         loadProjectsForMonth(YearMonth.now())
@@ -146,7 +159,8 @@ class ProjectViewModel @Inject constructor(
 
                     is NetworkResult.Success -> {
                         _uiState.update {
-                            it.copy(isLoading = false, projects = result.data
+                            it.copy(
+                                isLoading = false, projects = result.data
                             )
                         }
                     }
@@ -165,13 +179,12 @@ class ProjectViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 currentMonth = month,
-                daysWithProjectsInMonth = emptySet() // clear old dots
+                daysWithProjectsInMonth = emptySet()
             )
         }
 
         val from = month.atDay(1).format(DateTimeFormatter.ISO_DATE)
         val to = month.atEndOfMonth().format(DateTimeFormatter.ISO_DATE)
-
         viewModelScope.launch {
             projectRepository.getProjectsFiltered(
                 startDateFrom = from,
@@ -180,13 +193,18 @@ class ProjectViewModel @Inject constructor(
                 if (result is NetworkResult.Success) {
                     val days = result.data.mapNotNull { proj ->
                         runCatching {
-                            LocalDate.parse(proj.startDate).dayOfMonth
-                        }.getOrNull()
+                            java.time.Instant.parse(proj.createdAt)
+                                .atZone(ZoneId.systemDefault())
+                                .toLocalDate()
+                                .let { date ->
+                                    if (YearMonth.from(date) == month) date.dayOfMonth else null
+                                }
+                        }.getOrElse {
+                            runCatching { LocalDate.parse(proj.endDate).dayOfMonth }.getOrNull()
+                        }
                     }.toSet()
 
-                    _uiState.update {
-                        it.copy(daysWithProjectsInMonth = days)
-                    }
+                    _uiState.update { it.copy(daysWithProjectsInMonth = days) }
                 }
             }
         }
@@ -207,7 +225,6 @@ class ProjectViewModel @Inject constructor(
             }
 
             ProjectFilter.HIGH, ProjectFilter.MEDIUM, ProjectFilter.LOW -> {
-                // Priority filters MUST reset date
                 _uiState.update { it.copy(selectedDate = null) }
             }
         }
@@ -218,7 +235,6 @@ class ProjectViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 selectedDate = date,
-                // When selecting a date, override filter
                 selectedFilter = if (date != null) ProjectFilter.ALL else it.selectedFilter
             )
         }
@@ -289,6 +305,12 @@ class ProjectViewModel @Inject constructor(
     fun uploadAttachment(taskId: Long, fileUri: Uri, fileName: String) {
         viewModelScope.launch {
 
+            val currentAttachments = _uiState.value.attachmentsByTask[taskId] ?: emptyList()
+
+            if (currentAttachments.size >= 5) {
+                return@launch
+            }
+
             projectRepository.uploadTaskAttachment(taskId, fileUri, fileName).collect { result ->
                 when (result) {
                     is NetworkResult.Loading -> {
@@ -308,7 +330,50 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    fun viewAttachment(context: Context, attachment: TaskAttachmentResponse) {
+        viewModelScope.launch {
+            val localFile = File(context.cacheDir, attachment.fileName)
+
+            if (localFile.exists()) {
+                openSecureFile(context, localFile, attachment.mimeType)
+                return@launch
+            }
+
+            val fullUrl = attachment.downloadUrl
+
+            println("Attempting to download file from S3: $fullUrl")
+            val downloadedFile = projectRepository.downloadAndCacheFile(attachment.fileName, fullUrl)
+
+            if (downloadedFile != null) {
+                openSecureFile(context, downloadedFile, attachment.mimeType)
+            } else {
+                _uiEvent.emit(UiEvent.ShowToast("Offline: File not found in cache"))
+            }
+        }
+    }
+
+
+    private fun openSecureFile(context: Context, file: File, mimeType: String) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            //  no PDF/Image viewer app is installed
+        }
+    }
     fun updateTaskStatus(taskId: Long, newStatus: TaskStatus) {
+        val state = _uiState.value
+        if (state.isLoading) return
+
         viewModelScope.launch {
             val currentTask = _uiState.value.tasks.find { it.id == taskId }
             val projectId = _uiState.value.currentProject?.id
@@ -326,14 +391,17 @@ class ProjectViewModel @Inject constructor(
                 endDate = currentTask.endDate,
                 status = newStatus.name
             )
+            _uiState.update { it.copy(isLoading = true) }
 
             projectRepository.updateTask(taskId, request).collect { result ->
                 when (result) {
                     is NetworkResult.Success -> {
+                        _uiState.update { it.copy(isLoading = false) }
                         _uiEvent.emit(UiEvent.ShowToast("Task status updated!"))
                         loadProjectTasks(projectId)
                     }
                     is NetworkResult.Error -> {
+                        _uiState.update { it.copy(isLoading = false) }
                         _uiEvent.emit(UiEvent.ShowToast("Failed to update task: ${result.message}"))
                     }
                     else -> Unit
@@ -343,15 +411,17 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun onProjectNameChanged(name: String) {
-        _createProjectState.value = _createProjectState.value.copy(name = name)
+       if(name.length <= 25){
+           _createProjectState.value = _createProjectState.value.copy(name = name)
+       }
     }
 
     fun onProjectDescriptionChanged(description: String) {
         _createProjectState.value = _createProjectState.value.copy(description = description)
     }
 
-    fun onProjectStartDateChanged(date: LocalDate) {
-        _createProjectState.value = _createProjectState.value.copy(startDate = date)
+    fun onProjectEndDateChanged(date: LocalDate) {
+        _createProjectState.value = _createProjectState.value.copy(endDate = date)
     }
 
     fun onProjectPriorityChanged(priority: ProjectPriority) {
@@ -359,17 +429,19 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun onCurrentTagChanged(tag: String) {
-        _createProjectState.value = _createProjectState.value.copy(currentTag = tag)
+        if (tag.length < 12) {
+            _createProjectState.value = _createProjectState.value.copy(currentTag = tag)
+        }
     }
-
     fun addTag() {
         val currentTag = _createProjectState.value.currentTag.trim()
-        if (currentTag.isNotEmpty() && !_createProjectState.value.tags.contains(currentTag)) {
+        if (currentTag.isNotEmpty() &&!_createProjectState.value.tags.contains(currentTag)) {
             _createProjectState.value = _createProjectState.value.copy(
                 tags = _createProjectState.value.tags + currentTag,
                 currentTag = ""
             )
         }
+
     }
 
     fun removeTag(tag: String) {
@@ -439,7 +511,9 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun createProject() {
+        if (_createProjectState.value.isLoading) return
         val state = _createProjectState.value
+        
         if (state.name.isBlank()) {
             viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("Project name is required")) }
             return
@@ -449,36 +523,45 @@ class ProjectViewModel @Inject constructor(
             viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("At least one assignee is required")) }
             return
         }
+        if(state.description.isEmpty()){
+            viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("Description is required")) }
+            return
+        }
 
-        val request = CreateProjectRequest(
-            name = state.name.trim(),
-            description = state.description.trim().takeIf { it.isNotEmpty() },
-            startDate = state.startDate.format(DateTimeFormatter.ISO_DATE),
-            priority = state.priority.name,
-            assigneeIds = state.selectedAssignees.map { it.userId },
-            tags = state.tags
-        )
+        val startDateTime = LocalDateTime.of(state.endDate, state.endTime)
+        val formattedStartDate = startDateTime.atZone(ZoneId.systemDefault()).toInstant().toString()
 
-        _createProjectState.value = state.copy(isLoading = true)
+        _createProjectState.update { it.copy(isLoading = true) }
+        
         viewModelScope.launch {
-            projectRepository.createProject(request).collect { result ->
-                _createProjectState.value = _createProjectState.value.copy(isLoading = false)
+            projectRepository.createProject(
+                CreateProjectRequest(
+                    name = state.name.trim(),
+                    description = state.description.trim().takeIf { it.isNotEmpty() },
+                    endDate = formattedStartDate,
+                    priority = state.priority.name,
+                    assigneeIds = state.selectedAssignees.map { it.userId },
+                    tags = state.tags
+                )
+            ).collect { result ->
                 when (result) {
                     is NetworkResult.Success -> {
-                        val newProject = result.data
-
-                        _uiState.update {
-                            it.copy(
-                                projects = listOf(newProject) + it.projects
-                            )
+                        _createProjectState.update { it.copy(isLoading = false) }
+                        _uiState.update { current ->
+                            current.copy(projects = listOf(result.data) + current.projects)
                         }
-
+                        loadProjectsForMonth(uiState.value.currentMonth)
                         _uiEvent.emit(UiEvent.ShowToast("Project created successfully"))
                         clearProjectForm()
                         _uiEvent.emit(UiEvent.NavigateBack)
                     }
-                    is NetworkResult.Error -> _uiEvent.emit(UiEvent.ShowToast(result.message))
-                    else -> Unit
+                    is NetworkResult.Error -> {
+                        _createProjectState.update { it.copy(isLoading = false) }
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    is NetworkResult.Loading -> {
+                        _createProjectState.update { it.copy(isLoading = true) }
+                    }
                 }
             }
         }
@@ -490,6 +573,7 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun onTaskNameChanged(name: String) {
+        if(name.length<=25)
         _createTaskState.value = _createTaskState.value.copy(name = name)
     }
 
@@ -563,8 +647,10 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun createTask() {
+        if (_createTaskState.value.isLoading) return
         val state = _createTaskState.value
         val projectId = state.projectId
+
         if (projectId == null) {
             viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("No project selected")) }
             return
@@ -581,37 +667,43 @@ class ProjectViewModel @Inject constructor(
             viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("End date cannot be before start date")) }
             return
         }
-        val request = CreateTaskRequest(
-            name = state.name.trim(),
-            description = state.description.trim().takeIf { it.isNotEmpty() },
-            projectId = projectId,
-            assigneeId = state.selectedAssignee.userId,
-            startDate = state.startDate.format(DateTimeFormatter.ISO_DATE),
-            endDate = state.endDate.format(DateTimeFormatter.ISO_DATE),
-            status = state.status.name
-        )
-        _createTaskState.value = state.copy(isLoading = true)
+
+        _createTaskState.update { it.copy(isLoading = true) }
+        
         viewModelScope.launch {
-            projectRepository.createTask(request).collect { result ->
-                _createTaskState.value = _createTaskState.value.copy(isLoading = false)
+            projectRepository.createTask(
+                CreateTaskRequest(
+                    name = state.name.trim(),
+                    description = state.description.trim().takeIf { it.isNotEmpty() },
+                    projectId = projectId,
+                    assigneeId = state.selectedAssignee.userId,
+                    startDate = state.startDate.format(DateTimeFormatter.ISO_DATE),
+                    endDate = state.endDate.format(DateTimeFormatter.ISO_DATE),
+                    status = state.status.name
+                )
+            ).collect { result ->
                 when (result) {
                     is NetworkResult.Success -> {
-                        _uiState.update { state ->
-                            state.copy(
-                                projects = state.projects.map {
+                        _createTaskState.update { it.copy(isLoading = false) }
+                        _uiState.update { current ->
+                            current.copy(
+                                projects = current.projects.map {
                                     if (it.id == projectId) it.copy(taskCount = it.taskCount + 1)
                                     else it
                                 }
                             )
                         }
-
                         loadProjectTasks(projectId)
                         _uiEvent.emit(UiEvent.NavigateBack)
+                        clearTaskForm()
                     }
-
-
-                    is NetworkResult.Error -> _uiEvent.emit(UiEvent.ShowToast(result.message))
-                    else -> Unit
+                    is NetworkResult.Error -> {
+                        _createTaskState.update { it.copy(isLoading = false) }
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    is NetworkResult.Loading -> {
+                        _createTaskState.update { it.copy(isLoading = true) }
+                    }
                 }
             }
         }
@@ -619,10 +711,6 @@ class ProjectViewModel @Inject constructor(
 
     fun clearTaskForm() {
         _createTaskState.value = TaskUiState()
-    }
-
-    fun onTabSelected(tabIndex: Int) {
-        _uiState.value = _uiState.value.copy(selectedTab = tabIndex)
     }
 
     fun goBackToProjects() {
@@ -640,10 +728,22 @@ class ProjectViewModel @Inject constructor(
                     is NetworkResult.Success -> {
                         val project = result.data
                         _editingProjectId.value = project.id
+
+                        val zonedDateTime = try {
+                            java.time.Instant.parse(project.endDate)
+                                .atZone(ZoneId.systemDefault())
+                        }
+                        catch (e: Exception) {
+                            java.time.ZonedDateTime.now().plusDays(7)
+                        }
+
                         _createProjectState.value = CreateProjectUiState(
                             name = project.name,
                             description = project.description ?: "",
-                            startDate = LocalDate.parse(project.startDate.take(10)),
+
+                            endDate = zonedDateTime.toLocalDate(),
+                            endTime = zonedDateTime.toLocalTime(),
+
                             priority = ProjectPriority.valueOf(project.priority),
                             selectedAssignees = project.assignees,
                             tags = project.tags,
@@ -660,7 +760,18 @@ class ProjectViewModel @Inject constructor(
         }
     }
 
+    fun onProjectEndTimeChanged(time: LocalTime) {
+        _createProjectState.value = _createProjectState.value.copy(endTime = time)
+    }
+
+    fun toggleTimePicker() {
+        _createProjectState.value = _createProjectState.value.copy(
+            showTimePicker = !_createProjectState.value.showTimePicker
+        )
+    }
+
     fun updateProject() {
+        if (_createProjectState.value.isLoading) return
         val state = _createProjectState.value
         val projectId = _editingProjectId.value ?: return
 
@@ -672,40 +783,54 @@ class ProjectViewModel @Inject constructor(
             viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("At least one assignee is required")) }
             return
         }
+        if (state.description.isEmpty()) {
+            viewModelScope.launch { _uiEvent.emit(UiEvent.ShowToast("Description is required")) }
+            return
+        }
 
-        val request = UpdateProjectRequest(
-            name = state.name.trim(),
-            description = state.description.trim().takeIf { it.isNotEmpty() },
-            startDate = state.startDate.format(DateTimeFormatter.ISO_DATE),
-            priority = state.priority.name,
-            assigneeIds = state.selectedAssignees.map { it.userId },
-            tags = state.tags
-        )
 
-        _createProjectState.value = state.copy(isLoading = true)
+        val endDateTime = LocalDateTime.of(state.endDate, state.endTime)
+        val formattedEndDate = endDateTime.atZone(ZoneId.systemDefault()).toInstant().toString()
+
+        _createProjectState.update { it.copy(isLoading = true) }
+        
         viewModelScope.launch {
-            projectRepository.updateProject(projectId, request).collect { result ->
-                _createProjectState.value = _createProjectState.value.copy(isLoading = false)
+            projectRepository.updateProject(
+                projectId,
+                UpdateProjectRequest(
+                    name = state.name.trim(),
+                    description = state.description.trim().takeIf { it.isNotEmpty() },
+                    endDate = formattedEndDate,
+                    priority = state.priority.name,
+                    assigneeIds = state.selectedAssignees.map { it.userId },
+                    tags = state.tags
+                )
+            ).collect { result ->
                 when (result) {
                     is NetworkResult.Success -> {
-                        val event = if (_createProjectState.value.showAssigneeDialog) {
+                        _createProjectState.update { it.copy(isLoading = false) }
+                        val event = if (state.showAssigneeDialog) {
                             UiEvent.ShowToast("Assignees updated successfully")
                         } else {
                             UiEvent.ShowToast("Project updated successfully")
                         }
                         _uiEvent.emit(event)
-
                         loadProjectById(projectId)
                         loadProjectsForMonth(uiState.value.currentMonth)
-                        if (_createProjectState.value.showAssigneeDialog) {
+                        if (state.showAssigneeDialog) {
                             toggleAssigneeDialog()
                         } else {
                             _uiEvent.emit(UiEvent.NavigateBack)
                         }
                         clearProjectForm()
                     }
-                    is NetworkResult.Error -> _uiEvent.emit(UiEvent.ShowToast(result.message))
-                    else -> Unit
+                    is NetworkResult.Error -> {
+                        _createProjectState.update { it.copy(isLoading = false) }
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                    is NetworkResult.Loading -> {
+                        _createProjectState.update { it.copy(isLoading = true) }
+                    }
                 }
             }
         }
@@ -720,7 +845,9 @@ class ProjectViewModel @Inject constructor(
     }
 
     fun confirmDeleteCurrentProject() {
+        val state = _uiState.value
         val projectToDelete = _uiState.value.currentProject ?: return
+        if (state.isLoading) return
 
         viewModelScope.launch {
             projectRepository.deleteProject(projectToDelete.id).collect { result ->
@@ -730,14 +857,18 @@ class ProjectViewModel @Inject constructor(
                             it.copy(
                                 projects = it.projects.filterNot { p -> p.id == projectToDelete.id },
                                 currentProject = null,
-                                showDeleteProjectDialog = false
+                                showDeleteProjectDialog = false,
+                                isLoading = false
                             )
                         }
                         _uiEvent.emit(UiEvent.NavigateBack)
                     }
 
-                    is NetworkResult.Error ->
+                    is NetworkResult.Error ->{
+                        _uiState.update { it.copy(isLoading = false) }
                         _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+
 
                     else -> Unit
                 }
@@ -749,6 +880,39 @@ class ProjectViewModel @Inject constructor(
         viewModelScope.launch {
             pollRepository.getProjectPoll(projectId).collect { result ->
                 _uiState.value = _uiState.value.copy(projectHasPoll = result is NetworkResult.Success)
+            }
+        }
+    }
+
+    fun deleteTask(taskId: Long) {
+        val currentProjectId = _uiState.value.currentProject?.id ?: return
+
+        viewModelScope.launch {
+            projectRepository.deleteTask(taskId).collect { result ->
+                when (result) {
+                    is NetworkResult.Loading -> {
+                        _uiState.update { it.copy(isLoading = true) }
+                    }
+                    is NetworkResult.Success -> {
+                        _uiState.update { state ->
+                            state.copy(
+                                isLoading = false,
+                                // Filter out the deleted task from the current list
+                                tasks = state.tasks.filterNot { it.id == taskId },
+                                // Update the task count on the current project locally
+                                projects = state.projects.map {
+                                    if (it.id == currentProjectId) it.copy(taskCount = it.taskCount - 1)
+                                    else it
+                                }
+                            )
+                        }
+                        _uiEvent.emit(UiEvent.ShowToast("Task deleted successfully"))
+                    }
+                    is NetworkResult.Error -> {
+                        _uiState.update { it.copy(isLoading = false) }
+                        _uiEvent.emit(UiEvent.ShowToast(result.message))
+                    }
+                }
             }
         }
     }

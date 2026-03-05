@@ -1,21 +1,19 @@
 package com.example.linkit.view.screens
 
-import android.app.DownloadManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.os.Environment
-import android.util.Log
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -23,12 +21,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,32 +38,35 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
-import coil.compose.rememberAsyncImagePainter
 import com.example.linkit.R
 import com.example.linkit.data.models.*
-import com.example.linkit.util.Constants
+import com.example.linkit.ui.theme.AntonFontFamily
+import com.example.linkit.ui.theme.grenze_blackItalic
+import com.example.linkit.ui.theme.matalmania
+import com.example.linkit.ui.theme.odisansFamily
 import com.example.linkit.util.UiEvent
+import com.example.linkit.view.components.AuthorizedAsyncImage
+import com.example.linkit.view.components.BrushStrokeShape
 import com.example.linkit.viewmodel.PollViewModel
 import com.example.linkit.viewmodel.ProfileViewModel
 import com.example.linkit.viewmodel.ProjectViewModel
 import com.example.linkit.viewmodel.ViewedProfileState
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.io.File
-import java.io.FileOutputStream
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -76,7 +80,8 @@ fun TaskScreen(
     onNavigateBack: () -> Unit,
     onNavigateToCreateTask: (Long) -> Unit,
     onNavigateToCreatePoll: (Long) -> Unit,
-    onNavigateToChat: (Long) -> Unit
+    onNavigateToChat: (Long) -> Unit,
+    onNavigateToAnalytics: (Long) -> Unit
 
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -89,6 +94,7 @@ fun TaskScreen(
     val pollViewModel: PollViewModel = hiltViewModel()
     val pollState by pollViewModel.pollState.collectAsState()
     var showPollDialog by remember { mutableStateOf(false) }
+    var selectedTaskForDetail by remember { mutableStateOf<TaskResponse?>(null) }
 
     if (showPollDialog && pollState.poll != null) {
         PollDialog(
@@ -101,14 +107,13 @@ fun TaskScreen(
         )
     }
 
-
     if (showBottomSheet.value) {
         ModalBottomSheet(
             onDismissRequest = { profileViewModel.closeUserProfileSheet() },
             sheetState = sheetState,
             scrimColor = Color.Black.copy(alpha = 0.5f),
         ) {
-            UserProfileSheetContent(
+            UserProfileSheet(
                 state = viewedProfileState,
                 onClose = {
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -120,12 +125,19 @@ fun TaskScreen(
             )
         }
     }
+    if (selectedTaskForDetail != null) {
+        TaskDetailBottomSheet(
+            task = selectedTaskForDetail!!,
+            onDismiss = { selectedTaskForDetail = null }
+        )
+    }
+
 
     LaunchedEffect(projectId) {
         viewModel.loadProjectById(projectId)
         viewModel.loadProjectTasks(projectId)
         viewModel.uiEvent.collectLatest { event ->
-            when (event) {
+             when (event) {
                 is UiEvent.ShowToast -> snackbarHostState.showSnackbar(event.msg)
                 UiEvent.NavigateBack -> onNavigateBack()
                 else -> Unit
@@ -156,11 +168,15 @@ fun TaskScreen(
         )
     }
 
+
+
+
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFFF7F8FA)
+        color = Color(0xFFEDF1F3)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            var isNavigating by remember { mutableStateOf(false) }
             ProjectHeader(
                 project = uiState.currentProject,
                 taskCount = uiState.tasks.size,
@@ -168,8 +184,11 @@ fun TaskScreen(
                 projectHasPoll = uiState.projectHasPoll,
 
                 onNavigateBack = {
-                    viewModel.goBackToProjects()
-                    onNavigateBack()
+                    if (!isNavigating) {
+                        isNavigating = true
+                        viewModel.goBackToProjects()
+                        onNavigateBack()
+                    }
                 },
                 onDeleteProject = { viewModel.onDeleteProjectClicked() },
                 onAddAssignees = {
@@ -181,7 +200,8 @@ fun TaskScreen(
                     pollViewModel.getPoll(projectId)
                     showPollDialog = true
                 },
-                        onNavigateToChat = { onNavigateToChat(projectId) }
+                        onNavigateToChat = { onNavigateToChat(projectId) },
+                onNavigateToAnalytics = { onNavigateToAnalytics(projectId) }
             )
 
             if (uiState.isLoading) {
@@ -194,7 +214,7 @@ fun TaskScreen(
                     onCreateTask = { onNavigateToCreateTask(projectId) }
                 )
             } else {
-                TaskTimeline(
+                TaskCard(
                     tasks = uiState.tasks,
                     attachmentsByTask = uiState.attachmentsByTask,
                     loggedInUserId = uiState.loggedInUserId,
@@ -202,16 +222,19 @@ fun TaskScreen(
                         profileViewModel.viewUserProfile(userId)
                     },
                     viewModel = viewModel,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    onTaskClick = { task -> selectedTaskForDetail = task }
+
                 )
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Box(modifier = Modifier.fillMaxSize().padding(10.dp).navigationBarsPadding()) {
             if (uiState.currentProject != null) {
                 FloatingActionButton(
                     onClick = { onNavigateToCreateTask(projectId) },
-                    containerColor = MaterialTheme.colorScheme.primary,
+                    containerColor = Color.Black.copy(alpha = 0.8f),
+                    contentColor = Color.White,
                     modifier = Modifier.align(Alignment.BottomEnd)
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Create Task")
@@ -233,7 +256,8 @@ private fun ProjectHeader(
     onAddAssignees: () -> Unit,
     onNavigateToCreatePoll: () -> Unit,
     onViewPollClicked: () -> Unit,
-    onNavigateToChat: () -> Unit
+    onNavigateToChat: () -> Unit,
+    onNavigateToAnalytics: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -247,22 +271,15 @@ private fun ProjectHeader(
     ) {
         Column(
             modifier = Modifier
-                .padding(16.dp)
-                .padding(top = 32.dp)
+                .padding(14.dp)
+                .padding(top = 28.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                }
-
-                IconButton(onClick = onNavigateToChat) {
-                    Icon(
-                        imageVector = Icons.Default.AccountBox,
-                        contentDescription = "Open Chat"
-                    )
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Black.copy(0.8f))
                 }
 
                 Text(
@@ -273,44 +290,77 @@ private fun ProjectHeader(
 
                 if (projectHasPoll) {
                     IconButton(onClick = onViewPollClicked) {
-                        Icon(Icons.Default.DateRange, contentDescription = "View Poll")
+                        Icon(Icons.Filled.Poll, contentDescription = "View Poll", tint = Color.Blue.copy(0.4f))
                     }
+                }
+                IconButton(onClick = onNavigateToChat) {
+                    Icon(
+                        imageVector = Icons.Filled.MarkUnreadChatAlt,
+                        contentDescription = "Open Chat",
+                        tint = Color.Black.copy(0.8f)
+                    )
+                }
+                IconButton(onClick = onNavigateToAnalytics) {
+                    Icon(
+                        imageVector = Icons.Filled.BarChart,
+                        contentDescription = "Project Analytics",
+                        tint = Color.Black.copy(0.8f)
+                    )
                 }
 
                 Box {
                     IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                        Icon(Icons.Default.MoreVert, contentDescription = "More Options",tint = Color.Black.copy(0.8f))
                     }
                     DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text(if (projectHasPoll) "Create / Replace Poll" else "Create Poll") },
+                            text = {
+                                Text(if (projectHasPoll) "Create new Poll" else "Create Poll")
+                            },
                             onClick = {
                                 onNavigateToCreatePoll()
                                 showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Create,
+                                    contentDescription = ""
+                                )
                             }
                         )
+                        HorizontalDivider()
+
                         if (loggedInUserId != null && loggedInUserId == project?.createdBy) {
                             DropdownMenuItem(
                                 text = { Text("Delete Project", color = MaterialTheme.colorScheme.error) },
                                 onClick = {
                                     onDeleteProject()
                                     showMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.DeleteOutline,
+                                        contentDescription = "",
+                                        tint = Color.Red
+                                    )
                                 }
                             )
                         }
                     }
+
                 }
             }
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(1.dp))
             if (project != null) {
                 Text(
                     text = project.name,
                     style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black.copy(0.8f)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "$taskCount tasks | ${formatDate(project.startDate, "MMM dd, yyyy")}",
+                    text = "$taskCount tasks | ${com.example.linkit.util.TimeUtils.formatProjectDate(project.createdAt)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray
                 )
@@ -342,12 +392,13 @@ private fun AssigneesRow(
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .border(2.dp,Color.White,CircleShape)
+                    .background(Color.Black.copy(0.8f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "+${assignees.size - 3}",
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -357,36 +408,65 @@ private fun AssigneesRow(
                 .padding(start = 20.dp)
                 .size(40.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFF7F8FA))
+                .background(Color(0xFFEDF1F3))
                 .clickable { onAddAssigneeClick() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Add Assignee", tint = Color.Gray)
+            Icon(Icons.Default.Add, contentDescription = "Add Assignee", tint = Color.Black)
         }
     }
 }
 
 @Composable
-private fun TaskTimeline(
+private fun TaskCard(
     tasks: List<TaskResponse>,
     attachmentsByTask: Map<Long, List<TaskAttachmentResponse>>,
     loggedInUserId: Long?,
     onAssigneeClick: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ProjectViewModel
+    viewModel: ProjectViewModel,
+    onTaskClick: (TaskResponse) -> Unit
 ) {
     val sortedTasks = remember(tasks) {
         tasks.sortedByDescending { it.createdAt }
     }
+    val context = LocalContext.current
 
     LazyColumn(
         modifier = modifier,
         contentPadding = PaddingValues(top = 24.dp, bottom = 80.dp),
     ) {
-        itemsIndexed(sortedTasks) { index, task ->
-            val date = LocalDate.parse(task.createdAt.take(10))
-            val isFirstInGroup = index == 0 || date != LocalDate.parse(sortedTasks[index - 1].createdAt.take(10))
-            val isLastInGroup = index == sortedTasks.lastIndex || date != LocalDate.parse(sortedTasks[index + 1].createdAt.take(10))
+        itemsIndexed(
+            items = sortedTasks,
+            key = { _, task -> task.id }
+        ) { index, task ->
+
+            val currentTaskLocalDate = remember(task.createdAt) {
+                com.example.linkit.util.TimeUtils.safeInstant(task.createdAt)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate()
+            }
+
+            val isFirstInGroup = if (index == 0) {
+                true
+            } else {
+                val prevTask = sortedTasks[index - 1]
+                val prevTaskLocalDate = com.example.linkit.util.TimeUtils.safeInstant(prevTask.createdAt)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate()
+                currentTaskLocalDate != prevTaskLocalDate
+            }
+
+            val isLastInGroup = if (index == sortedTasks.lastIndex) {
+                true
+            } else {
+                val nextTask = sortedTasks[index + 1]
+                val nextTaskLocalDate = com.example.linkit.util.TimeUtils.safeInstant(nextTask.createdAt)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate()
+                currentTaskLocalDate != nextTaskLocalDate
+            }
+
             val previousStatus = if (index > 0) TaskStatus.valueOf(sortedTasks[index - 1].status) else null
             val attachments = attachmentsByTask[task.id] ?: emptyList()
             var cardSize by remember { mutableStateOf(IntSize.Zero) }
@@ -394,7 +474,7 @@ private fun TaskTimeline(
             Column {
                 if (isFirstInGroup) {
                     Text(
-                        text = date.format(DateTimeFormatter.ofPattern("dd MMM")),
+                        text = currentTaskLocalDate.format(DateTimeFormatter.ofPattern("dd MMM")),
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(start = 32.dp, bottom = 12.dp, top = if (index > 0) 16.dp else 0.dp)
@@ -402,7 +482,7 @@ private fun TaskTimeline(
                 }
 
                 Row {
-                    TimelineGutter(
+                    Timeline(
                         modifier = Modifier.height(with(LocalDensity.current) { cardSize.height.toDp() }),
                         status = TaskStatus.valueOf(task.status),
                         previousStatus = previousStatus,
@@ -419,9 +499,14 @@ private fun TaskTimeline(
                         onStatusChange = { newStatus ->
                             viewModel.updateTaskStatus(task.id, newStatus)
                         },
-                        onUploadFile = { uri , fileName->
+                        onUploadFile = { uri, fileName ->
                             viewModel.uploadAttachment(task.id, uri, fileName)
-                        }
+                        },
+                        onViewAttachment = { attachment ->
+                            viewModel.viewAttachment(context, attachment)
+                        },
+                        onDeleteTask = { viewModel.deleteTask(task.id) },
+                        onTaskClick = { onTaskClick(task) }
                     )
                 }
             }
@@ -430,7 +515,7 @@ private fun TaskTimeline(
 }
 
 @Composable
-fun TimelineGutter(
+fun Timeline(
     modifier: Modifier = Modifier,
     status: TaskStatus,
     previousStatus: TaskStatus?,
@@ -438,15 +523,15 @@ fun TimelineGutter(
     isLastInGroup: Boolean,
 ) {
     val statusColor = when (status) {
-        TaskStatus.TODO -> Color.Gray
-        TaskStatus.IN_PROGRESS -> Color(0xFFFFA000)
-        TaskStatus.COMPLETED -> Color(0xFF673AB7)
+        TaskStatus.TODO -> Color.Black.copy(0.3f)
+        TaskStatus.IN_PROGRESS -> Color.Black.copy(0.7f)
+        TaskStatus.COMPLETED -> Color.Black.copy(0.8f)
     }
 
     val previousStatusColor = when (previousStatus) {
-        TaskStatus.TODO -> Color.Gray
-        TaskStatus.IN_PROGRESS -> Color(0xFFFFA000)
-        TaskStatus.COMPLETED -> Color(0xFF673AB7)
+        TaskStatus.TODO -> Color.White
+        TaskStatus.IN_PROGRESS -> Color.White
+        TaskStatus.COMPLETED -> Color.White
         null -> Color.Transparent
     }
 
@@ -497,18 +582,23 @@ private fun TimelineTaskCard(
     loggedInUserId: Long?,
     onAssigneeClick: (Long) -> Unit,
     onStatusChange: (TaskStatus) -> Unit,
-    onUploadFile: (Uri, String) -> Unit
+    onUploadFile: (Uri, String) -> Unit,
+    onViewAttachment: (TaskAttachmentResponse) -> Unit,
+    onDeleteTask: () -> Unit,
+    onTaskClick: (TaskResponse) -> Unit
 ) {
     val context = LocalContext.current
     val status = TaskStatus.valueOf(task.status)
     val statusColor = when (status) {
-        TaskStatus.TODO -> Color.Gray
-        TaskStatus.IN_PROGRESS -> Color(0xFFFFA000)
-        TaskStatus.COMPLETED -> Color(0xFF673AB7)
+        TaskStatus.TODO -> Color.Black
+        TaskStatus.IN_PROGRESS -> Color.Black
+        TaskStatus.COMPLETED -> Color.Black
     }
 
     val canChangeStatus = loggedInUserId == task.assignee.userId
     var showStatusMenu by remember { mutableStateOf(false) }
+    val canDeleteTask = loggedInUserId == task.createdBy
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -518,96 +608,137 @@ private fun TimelineTaskCard(
             onUploadFile(it, fileName)
         }
     }
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Task") },
+            text = { Text("Are you sure you want to delete this task?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteTask()
+                        showDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
 
     Card(
-        modifier = modifier.fillMaxWidth().padding(bottom = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(bottom = 12.dp).clickable { onTaskClick(task) },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Box {
                     val statusModifier = if (canChangeStatus) {
                         Modifier
                             .clip(RoundedCornerShape(8.dp))
                             .clickable { showStatusMenu = true }
-                            .padding(4.dp)
+                            .padding(2.5.dp)
                     } else {
-                        Modifier.padding(4.dp)
+                        Modifier.padding(5.dp)
                     }
 
-                    Row(modifier = statusModifier, verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = status.displayName,
-                            color = statusColor,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (canChangeStatus) {
-                            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = "Change Status", tint = statusColor)
-                        }
-                    }
-
-                    if (canChangeStatus) {
-                        DropdownMenu(expanded = showStatusMenu, onDismissRequest = { showStatusMenu = false }) {
-                            TaskStatus.values().forEach { statusOption ->
-                                DropdownMenuItem(
-                                    text = { Text(statusOption.displayName) },
-                                    onClick = {
-                                        onStatusChange(statusOption)
-                                        showStatusMenu = false
-                                    }
+                    Surface(
+                        color = Color.Red.copy(alpha = 0.5f),
+                        shape= BrushStrokeShape(
+                            brushSide = BrushStrokeShape.Side.Right,
+                            jaggedness = 30f,
+                            cornerRadius = 8f,
+                            variation = BrushStrokeShape.BrushVariation.WAVED
+                        ),
+                        modifier = Modifier.padding(3.dp)
+                    ) {
+                        Row(
+                            modifier = statusModifier,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = status.displayName,
+                                color = statusColor,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (canChangeStatus) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowDropDown,
+                                    contentDescription = "Change Status",
+                                    tint = statusColor
                                 )
+                            }
+                        }
+
+                        if (canChangeStatus) {
+                            DropdownMenu(
+                                expanded = showStatusMenu,
+                                onDismissRequest = { showStatusMenu = false }) {
+                                TaskStatus.entries.forEach { statusOption ->
+                                    DropdownMenuItem(
+                                        text = { Text(statusOption.displayName) },
+                                        onClick = {
+                                            onStatusChange(statusOption)
+                                            showStatusMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
-
-                Spacer(modifier = Modifier.weight(1f))
-                Text(text = "Nº ${task.id}", style = MaterialTheme.typography.labelMedium, color = Color.Gray)
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = task.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            if (!task.description.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = task.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            if (attachments.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(10.dp))
-                LazyRow(
-                    modifier = Modifier.height(40.dp),
-                    horizontalArrangement = Arrangement.spacedBy(-15.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    items(attachments) { attachment ->
-                        AttachmentChip(attachment = attachment)
+                if (canDeleteTask) {
+                    IconButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Delete Task",
+                            tint = Color.Red
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = task.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, fontFamily = grenze_blackItalic)
+
+            if (attachments.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyRow(
+                    modifier = Modifier.height(32.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(attachments) { attachment ->
+                        AttachmentChip(attachment = attachment, onViewFile = {
+                            onViewAttachment(attachment)
+                        })
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-//                    CountIndicator(icon = Icons.AutoMirrored.Filled.ArrowBack, count = task.messageCount)
-                    CountIndicator(icon = Icons.Filled.Add, count = task.attachmentCount)
-                    IconButton(onClick = { filePickerLauncher.launch("*/*") }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Add, contentDescription = "Add Attachment", tint = MaterialTheme.colorScheme.primary)
+                    CountIndicator(icon = Icons.Filled.AttachFile, count = task.attachmentCount)
+                    IconButton(onClick = { filePickerLauncher.launch("*/*") }, modifier = Modifier.size(21.dp)) {
+                        Icon(Icons.Filled.PostAdd, contentDescription = "Add Attachment", tint = Color.Black.copy(0.5f))
                     }
                 }
 
@@ -618,7 +749,11 @@ private fun TimelineTaskCard(
                         onClick = { onAssigneeClick(task.assignee.userId) }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "By ${task.creator.name}", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                    Text(
+                        text = "Assigned By ${task.creator.name}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.Gray
+                    )
                 }
             }
         }
@@ -626,12 +761,13 @@ private fun TimelineTaskCard(
 }
 
 
+
 private fun getFileName(context: Context, uri: Uri): String {
     var fileName = "unknown_file"
     val cursor = context.contentResolver.query(uri, null, null, null, null)
     cursor?.use {
         if (it.moveToFirst()) {
-            val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            val nameIndex = it.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (nameIndex != -1) {
                 fileName = it.getString(nameIndex)
             }
@@ -640,78 +776,29 @@ private fun getFileName(context: Context, uri: Uri): String {
     return fileName
 }
 
-
 @Composable
-fun AttachmentChip(attachment: TaskAttachmentResponse) {
-    val context = LocalContext.current
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-
-    // Launcher to request storage permission on older Android versions
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            scope.launch { snackbarHostState.showSnackbar("Permission granted. Please tap again to download.") }
-        } else {
-            scope.launch { snackbarHostState.showSnackbar("Storage permission is required to download files.") }
-        }
-    }
-
+fun AttachmentChip(
+    attachment: TaskAttachmentResponse,
+    onViewFile: (TaskAttachmentResponse) -> Unit
+) {
     OutlinedButton(
-        onClick = {
-            val downloadUrl = "${Constants.BASE_URL}${attachment.downloadUrl.removePrefix("/")}"
-
-            Log.d("Download", "download from server-provided URL: $downloadUrl")
-
-            val request = DownloadManager.Request(Uri.parse(downloadUrl))
-                .setTitle(attachment.fileName)
-                .setDescription("Downloading...")
-                .setMimeType(attachment.mimeType)
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, attachment.fileName)
-
-
-            // Check for permissions and enqueue the download.
-            // For Android 10 (API 29) and above, no special permission is needed to save to the public Downloads directory.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                downloadManager.enqueue(request)
-                scope.launch { snackbarHostState.showSnackbar("Download started...") }
-            } else {
-                // For Android 9 (API 28) and below, we must have storage permission.
-                when (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
-                    PackageManager.PERMISSION_GRANTED -> {
-                        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-                        downloadManager.enqueue(request)
-                        scope.launch { snackbarHostState.showSnackbar("Download started...") }
-                    }
-                    else -> {
-                        // Request permission if it hasn't been granted.
-                        permissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    }
-                }
-            }
-        },
+        onClick = { onViewFile(attachment) },
         modifier = Modifier.widthIn(max = 150.dp),
         shape = RoundedCornerShape(8.dp),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Icon(
-            imageVector = Icons.Default.Send,
-            contentDescription = "Download Attachment",
+            imageVector = Icons.Filled.OpenInNew,
+            contentDescription = "View Attachment",
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(attachment.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
-
-    SnackbarHost(hostState = snackbarHostState, modifier = Modifier.padding(16.dp))
 }
 
-
 @Composable
-private fun CountIndicator(icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int) {
+private fun CountIndicator(icon: ImageVector, count: Int) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         Icon(imageVector = icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
         Text(text = count.toString(), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -721,8 +808,9 @@ private fun CountIndicator(icon: androidx.compose.ui.graphics.vector.ImageVector
 @Composable
 private fun AssigneeAvatar(
     assignee: ProjectAssigneeResponse,
-    size: androidx.compose.ui.unit.Dp,
+    size: Dp,
     modifier: Modifier = Modifier,
+    isOffline: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
     val clickableModifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
@@ -732,7 +820,7 @@ private fun AssigneeAvatar(
             .size(size)
             .border(
                 width = 2.dp,
-                color = MaterialTheme.colorScheme.secondary,
+                color = Color.White,
                 shape = CircleShape
             )
             .clip(CircleShape)
@@ -740,14 +828,15 @@ private fun AssigneeAvatar(
             .then(clickableModifier)
     ) {
         if (!assignee.profileImageUrl.isNullOrBlank()) {
-            AsyncImage(
-                model = "${Constants.BASE_URL}${assignee.profileImageUrl.removePrefix("/")}",
+
+            AuthorizedAsyncImage(
+                imageUrl = assignee.profileImageUrl,
                 contentDescription = assignee.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.ic_person),
-                error = painterResource(R.drawable.ic_person)
+                isOffline = isOffline,
+                cacheKey = assignee.userId.toString(),
+                modifier = Modifier.fillMaxSize()
             )
+
         } else {
             Icon(
                 Icons.Default.Person,
@@ -770,17 +859,17 @@ private fun EmptyTasksView(modifier: Modifier = Modifier, onCreateTask: () -> Un
             painter = painterResource(R.drawable.ic_project),
             contentDescription = null,
             modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = Color.Black.copy(0.8f)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(text = "No Tasks Yet", style = MaterialTheme.typography.headlineSmall)
         Spacer(modifier = Modifier.height(8.dp))
         Text(text = "Create the first task for this project.")
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onCreateTask) {
+        Button(onClick = onCreateTask, colors = ButtonDefaults.buttonColors(Color.Black.copy(alpha = 0.8f))) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Create Task")
+            Text("Create Task", color = Color.White)
         }
     }
 }
@@ -863,7 +952,7 @@ private fun AssigneeSelectionDialog(
                                 },
                             colors = CardDefaults.cardColors(
                                 containerColor = if (isSelected)
-                                    MaterialTheme.colorScheme.primaryContainer
+                                    Color.Red.copy(0.4f)
                                 else
                                     MaterialTheme.colorScheme.surface
                             )
@@ -912,10 +1001,9 @@ private fun AssigneeSelectionDialog(
         }
     }
 }
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun UserProfileSheetContent(
+fun UserProfileSheet(
     state: ViewedProfileState,
     onClose: () -> Unit
 ) {
@@ -923,23 +1011,20 @@ fun UserProfileSheetContent(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(400.dp),
+                .height(300.dp),
             contentAlignment = Alignment.Center
         ) {
-            CircularProgressIndicator()
+            CircularProgressIndicator(color = Color.Black)
         }
         return
     }
 
-    val profile = state.profile
-    if (profile == null) {
+    val profile = state.profile ?: run {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp),
+            modifier = Modifier.fillMaxWidth().height(400.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("User not found.")
+            Text("User not found.", style = MaterialTheme.typography.bodyLarge)
         }
         return
     }
@@ -948,79 +1033,100 @@ fun UserProfileSheetContent(
     val scope = rememberCoroutineScope()
     val tabs = listOf("About", "Connections")
 
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 16.dp)
+            .background(Color.White)
     ) {
         Column(
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            Spacer(modifier = Modifier.height(24.dp))
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Box(contentAlignment = Alignment.BottomEnd) {
+                AuthorizedAsyncImage(
+                    imageUrl = profile.profileImageUrl,
+                    contentDescription = profile.name,
+                    cacheKey = profile.userId.toString(),
+                    modifier = Modifier
+                        .size(110.dp)
+                        .clip(CircleShape)
+                        .border(4.dp, Color(0xFFF1F1F1), CircleShape)
+                )
 
-            AsyncImage(
-                model = "${Constants.BASE_URL}${profile.profileImageUrl?.removePrefix("/")}",
-                contentDescription = profile.name ?: "User Avatar",
-                modifier = Modifier
-                    .size(90.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.ic_person),
-                error = painterResource(R.drawable.ic_person)
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(profile.name ?: "Unknown User", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            if (!profile.jobTitle.isNullOrBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(profile.jobTitle, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Surface(
+                    modifier = Modifier.size(24.dp).offset(x = (-4).dp, y = (-4).dp),
+                    color = Color(0xFF32BF94),
+                    shape = CircleShape,
+                    border = BorderStroke(3.dp, Color.White)
+                ) {}
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedButton(
-                    onClick = { /*TODO*/ },
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp)
+
+            Text(
+                text = profile.name ?: "Unknown User",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = odisansFamily,
+                color = Color.Black
+            )
+
+            if (!profile.jobTitle.isNullOrBlank()) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.05f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.padding(top = 8.dp)
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = "Share")
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(onClick = { /*TODO*/ }, modifier = Modifier.height(48.dp).width(150.dp)) {
-                    Text("MESSAGE")
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                OutlinedButton(
-                    onClick = { /*TODO*/ },
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    contentPadding = PaddingValues(0.dp)
-                ) {
-                    Icon(Icons.Default.Check, contentDescription = "Connected")
+                    Text(
+                        text = profile.jobTitle,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.DarkGray,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
-            TabRow(selectedTabIndex = pagerState.currentPage) {
+            TabRow(
+                selectedTabIndex = pagerState.currentPage,
+                containerColor = Color.Transparent,
+                contentColor = Color.Black,
+                indicator = { tabPositions ->
+                    if (pagerState.currentPage < tabPositions.size) {
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                            color = Color.Black,
+                            height = 3.dp
+                        )
+                    }
+                },
+                divider = { HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f)) }
+            ) {
                 tabs.forEachIndexed { index, title ->
                     Tab(
                         selected = pagerState.currentPage == index,
                         onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                        text = { Text(text = title) }
+                        text = {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
                     )
                 }
             }
 
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.height(250.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+                    .background(Color(0xFFF8F9FA))
             ) { page ->
                 when (page) {
                     0 -> AboutTab(profile.aboutMe)
@@ -1031,24 +1137,50 @@ fun UserProfileSheetContent(
 
         IconButton(
             onClick = onClose,
-            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .background(Color(0xFFF1F1F1), CircleShape)
+                .size(32.dp)
         ) {
-            Icon(Icons.Default.Close, contentDescription = "Close")
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "Close",
+                modifier = Modifier.size(18.dp),
+                tint = Color.Black
+            )
         }
     }
 }
 
 @Composable
 fun AboutTab(aboutMe: String?) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp)
     ) {
-        if (!aboutMe.isNullOrBlank()) {
-            Text(aboutMe, style = MaterialTheme.typography.bodyLarge)
-        } else {
-            Text("No information provided.", style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
+        Text(
+            text = "Bio",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Text(
+                text = if (!aboutMe.isNullOrBlank()) aboutMe else "No information provided.",
+                style = MaterialTheme.typography.bodyLarge,
+                lineHeight = 24.sp,
+                color = if (aboutMe.isNullOrBlank()) Color.Gray else Color.Black,
+                modifier = Modifier.padding(20.dp)
+            )
         }
     }
 }
@@ -1056,14 +1188,23 @@ fun AboutTab(aboutMe: String?) {
 @Composable
 fun ConnectionsTab(connections: List<ConnectionResponse>) {
     if (connections.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-            Text("No connections to show.")
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Group, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(48.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("No connections yet", color = Color.Gray)
+            }
         }
         return
     }
+
     LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize()
     ) {
         items(connections) { connection ->
             ConnectionCard(connection = connection)
@@ -1075,34 +1216,48 @@ fun ConnectionsTab(connections: List<ConnectionResponse>) {
 fun ConnectionCard(connection: ConnectionResponse) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = "${Constants.BASE_URL}${connection.profileImageUrl?.removePrefix("/")}",
-                contentDescription = connection.name ?: "User Avatar",
+            AuthorizedAsyncImage(
+                imageUrl = connection.profileImageUrl,
+                contentDescription = connection.name,
+                cacheKey = connection.userId.toString(),
                 modifier = Modifier
-                    .size(50.dp)
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.ic_person),
-                error = painterResource(R.drawable.ic_person)
+                    .size(54.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF1F1F1))
             )
+
             Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(connection.name ?: "Unknown User", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = connection.name,
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 if (!connection.company.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(connection.company, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                    Text(
+                        text = connection.company,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
                 }
             }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color.LightGray
+            )
         }
     }
 }
-
 @Composable
 private fun PollDialog(
     poll: PollResponse,
@@ -1114,46 +1269,48 @@ private fun PollDialog(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(10.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(
                 modifier = Modifier
                     .background(MaterialTheme.colorScheme.surface)
-                    .padding(16.dp)
+                    .padding(10.dp)
             ) {
-                // Header with Close
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Icon(
+                        imageVector = Icons.Filled.Poll,
+                        contentDescription = "Close",
+                        tint = Color.Black.copy(0.8f)
+                    )
                     Text(
-                        text = "📊 Poll",
+                        text = "Poll",
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(onClick = onDismissRequest) {
                         Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close"
+                            imageVector = Icons.Filled.Cancel,
+                            contentDescription = "Close",
+                            tint = Color.Black.copy(0.8f)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
-                // Poll Question
                 Text(
                     text = poll.question,
-                    style = MaterialTheme.typography.titleLarge.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold
                     ),
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
-                // Poll Options
                 poll.options.forEach { option ->
                     val isSelected = option.votes.any { it.user.userId == loggedInUserId }
                     PollOptionItem(
@@ -1188,73 +1345,213 @@ private fun PollOptionItem(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(),
+                onClick = onVote
             )
-            .clickable(onClick = onVote)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Icon(
+                imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                contentDescription = null,
+                tint = if (isSelected) Color.Black.copy(alpha = 0.8f) else Color.Gray,
+                modifier = Modifier.size(20.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
             Text(
                 text = option.optionText,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = if (isSelected) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurface
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.weight(1f))
-            if (poll.allowMultipleAnswers) {
-                Checkbox(checked = isSelected, onCheckedChange = { onVote() })
-            } else {
-                RadioButton(selected = isSelected, onClick = onVote)
-            }
+
+            Text(
+                text = "${(progress * 100).toInt()}%",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) Color.Black else Color.Gray
+            )
         }
 
         LinearProgressIndicator(
             progress = { animatedProgress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(10.dp)
-                .clip(RoundedCornerShape(50)),
-            color = if (isSelected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.secondary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                .padding(start = 32.dp)
+                .height(6.dp)
+                .clip(CircleShape),
+            color = if (isSelected) Color.Red.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+            trackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+            strokeCap = StrokeCap.Round
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 32.dp, top = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Voter Avatars
-            Box(modifier = Modifier.height(24.dp)) {
-                option.votes.take(5).forEachIndexed { index, vote ->
-                    AsyncImage(
-                        model = "${Constants.BASE_URL}${vote.user.profileImageUrl?.removePrefix("/")}",
-                        contentDescription = vote.user.name,
-                        modifier = Modifier
-                            .size(26.dp)
-                            .offset(x = (index * 18).dp)
-                            .clip(CircleShape)
-                            .border(1.dp, MaterialTheme.colorScheme.surface, CircleShape),
-                        contentScale = ContentScale.Crop,
-                        error = rememberAsyncImagePainter(model = R.drawable.ic_person)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = "${option.voteCount} vote${if (option.voteCount != 1) "s" else ""}",
+                text = "${option.voteCount} votes",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = Color.Gray
             )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy((-10).dp)) {
+                    option.votes.take(5).forEach { vote ->
+                        AuthorizedAsyncImage(
+                            imageUrl = vote.user.profileImageUrl,
+                            contentDescription = null,
+                            cacheKey = vote.user.userId.toString(),
+                            modifier = Modifier
+                                .size(25.dp)
+                                .clip(CircleShape)
+                                .border(1.dp, Color.Black.copy(0.8f), CircleShape)
+                        )
+                    }
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TaskDetailBottomSheet(
+    task: TaskResponse,
+    onDismiss: () -> Unit
+) {
+
+    val scrollState = rememberScrollState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        dragHandle = null,
+        containerColor = Color.Transparent,
+        tonalElevation = 0.dp,
+        scrimColor = Color.Black.copy(alpha = 0.32f)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 45.dp),
+                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                color = Color.White
+            ) {
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 24.dp)
+                        .padding(top = 60.dp, bottom = 40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Text(
+                            text = task.name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Surface(
+                            color = Color.Blue.copy(alpha = 0.2f),
+                            shape = BrushStrokeShape(brushSide = BrushStrokeShape.Side.Right, jaggedness = 15f),
+                        ) {
+                            Text(
+                                text = task.status,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(13.dp))
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(13.dp))
+
+                    Text(
+                        text = "Description",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = Color.Gray,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = task.description ?: "No description provided.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        lineHeight = 24.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider(color = Color.LightGray.copy(alpha = 0.3f))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(32.dp)
+                    ) {
+                        DateInfoColumn(label = "Created At", date = task.createdAt)
+                        DateInfoColumn(label = "Deadline", date = task.endDate ?: "TBD")
+                    }
+                }
+            }
+         Row(
+                modifier = Modifier.align(Alignment.TopCenter),
+                horizontalArrangement = Arrangement.spacedBy((-15).dp)
+            ) {
+                AssigneeAvatar(
+                    assignee = ProjectAssigneeResponse(
+                        userId = task.createdBy,
+                        name = task.creator.name,
+                        profileImageUrl = task.creator.profileImageUrl
+                    ),
+                    size = 90.dp
+                )
+                AssigneeAvatar(
+                    assignee = task.assignee,
+                    size = 90.dp
+                )
+            }
+        }
+    }
+}
+
+
+
+@Composable
+private fun DateInfoColumn(label: String, date: String) {
+    Column {
+        Text(text = label, style = MaterialTheme.typography.labelMedium, color = Color.Gray)
+        Text(
+            text = formatDate(date, "MMM dd, yyyy"),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
 
