@@ -18,6 +18,10 @@ roomKtx = "2.7.2"
 mpAndroidChart = "v3.1.0"
 vico = "2.0.0-alpha.20"
 ui = "1.10.1"
+mockk = "1.13.5"
+kotlinxCoroutinesTest = "1.7.3"
+turbine = "1.0.0"
+coreTesting = "2.2.0"
 
 [libraries]
 androidx-activity-compose-v180 = { module = "androidx.activity:activity-compose", version.ref = "activityComposeVersion" }
@@ -49,6 +53,10 @@ vico-compose = { group = "com.patrykandpatrick.vico", name = "compose", version.
 vico-compose-m3 = { group = "com.patrykandpatrick.vico", name = "compose-m3", version.ref = "vico" }
 vico-core = { group = "com.patrykandpatrick.vico", name = "core", version.ref = "vico" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "ui" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinxCoroutinesTest" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+androidx-core-testing = { module = "androidx.arch.core:core-testing", version.ref = "coreTesting" }
 
 
 [plugins]
