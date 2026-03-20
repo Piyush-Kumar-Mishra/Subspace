@@ -2,6 +2,7 @@ package com.example.linkit.data.api
 
 import com.example.linkit.data.models.*
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -37,9 +38,6 @@ interface ProjectApiService {
     @POST("api/tasks")
     suspend fun createTask(@Body request: CreateTaskRequest): Response<TaskResponse>
 
-    @GET("api/tasks/{id}")
-    suspend fun getTask(@Path("id") taskId: Long): Response<TaskResponse>
-
     @PUT("api/tasks/{id}")
     suspend fun updateTask(
         @Path("id") taskId: Long,
@@ -48,15 +46,6 @@ interface ProjectApiService {
 
     @DELETE("api/tasks/{id}")
     suspend fun deleteTask(@Path("id") taskId: Long): Response<Unit>
-
-    @GET("api/tasks/{taskId}/messages")
-    suspend fun getTaskMessages(@Path("taskId") taskId: Long): Response<TaskMessagesResponse>
-
-    @POST("api/tasks/{taskId}/messages")
-    suspend fun sendTaskMessage(
-        @Path("taskId") taskId: Long,
-        @Body request: TaskMessageRequest
-    ): Response<TaskMessageResponse>
 
     @GET("api/tasks/{taskId}/attachments")
     suspend fun getTaskAttachments(@Path("taskId") taskId: Long): Response<TaskAttachmentsResponse>
@@ -68,8 +57,9 @@ interface ProjectApiService {
         @Part file: MultipartBody.Part
     ): Response<TaskAttachmentResponse>
 
-    @POST("api/notifications/register")
-    suspend fun registerDeviceToken(@Body request: NotificationRequest): Response<Unit>
+    @Streaming
+    @GET
+    suspend fun downloadFile(@Url fileUrl: String, @Header("No-Authentication") noAuth: String = "true"): Response<ResponseBody>
 
     @POST("api/projects/{projectId}/poll")
     suspend fun createProjectPoll(
@@ -85,7 +75,4 @@ interface ProjectApiService {
         @Path("pollId") pollId: Long,
         @Path("optionId") optionId: Long
     ): Response<PollResponse>
-
-
-
 }
