@@ -128,7 +128,7 @@ It allows teams to manage their work from a mobile app. The app supports offline
 <img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
 
 
-## 📦 Libraries Used
+## ⬤ Libraries Used
 
 | Purpose | Library |
 |--------|---------|
@@ -142,13 +142,17 @@ It allows teams to manage their work from a mobile app. The app supports offline
 | ORM | Exposed ORM |
 | Authentication | JWT |
 
-## 📂 MVVM Architecture
+
+## ⬤ SQL EER Diagram
+
+<img width="882" height="721" alt="SQL" src="https://github.com/user-attachments/assets/b9f0d56f-709a-475f-af3a-f744812bc6a2" />
+
+## ⬤MVVM Architecture
 
 ```
 app/src/main/java/com/example/linkit/
 ├── data/                          
-│   ├── TokenStore.kt             
-│   │
+│   ├── TokenStore.kt
 │   ├── api/                       
 │   │   ├── AnalyticsApiService.kt
 │   │   ├── ApiService.kt
@@ -161,87 +165,56 @@ app/src/main/java/com/example/linkit/
 │   │   │   ├── AttachmentDao.kt
 │   │   │   ├── ChatMessageDao.kt
 │   │   │   ├── ConnectionDao.kt
-│   │   │   ├── ProjectDao.kt
-│   │   │   ├── TaskDao.kt
-│   │   │   └── UserDao.kt
+│   │   │   ├── ........
 │   │   └── entities/           
 │   │       ├── AttachmentEntity.kt
 │   │       ├── ChatMessageEntity.kt
 │   │       ├── ConnectionEntity.kt
-│   │       ├── ProjectEntity.kt
-│   │       ├── TaskEntity.kt
-│   │       └── UserEntity.kt
+│   │       ├── ........
 │   │
 │   ├── models/                    
 │   │   ├── AnalyticsModels.kt
 │   │   ├── ChatModels.kt
-│   │   ├── NotificationModels.kt
 │   │   ├── PollModels.kt
 │   │   ├── ProfileModels.kt
 │   │   ├── ProjectModels.kt
-│   │   └── auth_models
-│   │      
-│   │
+│   │   └── ...........
 │   └── repo/                   
 │       ├── AnalyticsRepository.kt
 │       ├── AuthRepository.kt
 │       ├── ChatRepository.kt
 │       ├── ChatWebSocketClient.kt
-│       ├── NotificationRepository.kt
-│       ├── PollRepository.kt
-│       ├── ProfileRepository.kt
-│       └── ProjectRepository.kt
+│       ├── ..........
 │
 ├── di/
 │   └── NetworkModule.kt   
-│
 ├── network/
 │   ├── AuthInterceptor.kt       
 │   └── ResponseInterceptor.kt  
 ├── util/                         
 │   ├── Constants.kt
-│   ├── Extensions.kt
 │   ├── ImageUtils.kt
 │   ├── JwtUtils.kt
-│   ├── NetworkResult.kt
 │   ├── NetworkUtils.kt
 │   ├── TimeUtils.kt
 │   └── UiEvent.kt
+│   ├── .........
 │
 ├── view/                     
 │   ├── components/                
-│   │
 │   ├── navigation/
 │   │   └── NavGraph.kt         
-│   │
 │   └── screens/                 
 │       ├── AnalyticsScreen.kt
 │       ├── AuthScreen.kt
 │       ├── ChatScreen.kt
-│       ├── ConnectionsScreen.kt
-│       ├── CreatePollScreen.kt
-│       ├── CreateProjectScreen.kt
-│       ├── CreateTaskScreen.kt
-│       ├── DashboardScreen.kt
-│       ├── EditProjectScreen.kt
-│       ├── EnterDetailsScreen.kt
-│       ├── GetStartedScreen.kt
-│       ├── MainScreen.kt
-│       ├── ProfileScreen.kt
-│       ├── SplashScreen.kt
-│       ├── TaskDetailScreen.kt
-│       └── TaskScreen.kt
-│
+│       ├── .......
+│     
 └── viewmodel/                   
     ├── AnalyticsViewModel.kt
     ├── AuthViewModel.kt
     ├── ChatViewModel.kt
-    ├── NotificationViewModel.kt
-    ├── PollViewModel.kt
-    ├── ProfileViewModel.kt
-    └── ProjectViewModel.kt
+    ├── ...........
 ```
-
-
 
 ---
