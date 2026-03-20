@@ -16,6 +16,7 @@ import com.example.linkit.ui.screens.ChatScreen
 import com.example.linkit.util.UiEvent
 import com.example.linkit.view.screens.*
 import com.example.linkit.viewmodel.AuthViewModel
+import com.example.linkit.viewmodel.NotificationViewModel
 import com.example.linkit.viewmodel.PollViewModel
 import com.example.linkit.viewmodel.ProfileViewModel
 import com.example.linkit.viewmodel.ProjectViewModel
@@ -30,6 +31,8 @@ sealed class Screen(val route: String) {
     object Main : Screen("main")
     object Profile : Screen("profile")
     object CreateProject : Screen("create_project")
+
+
     object EditProject : Screen("edit_project/{projectId}") {
         fun createRoute(projectId: Long) = "edit_project/$projectId"
     }
@@ -62,6 +65,7 @@ fun NavGraph(
     val profileViewModel: ProfileViewModel = hiltViewModel()
     val projectViewModel: ProjectViewModel = hiltViewModel()
     val pollViewModel: PollViewModel = hiltViewModel()
+    val notificationViewModel: NotificationViewModel = hiltViewModel()
 
     LaunchedEffect(Unit) {
         merge(authViewModel.uiEvent, pollViewModel.uiEvent).collectLatest { event ->
@@ -77,9 +81,15 @@ fun NavGraph(
     }
 
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
-        composable(Screen.Splash.route) { SplashScreen(viewModel = authViewModel) }
-        composable(Screen.GetStarted.route) { GetStartedScreen(onGetStarted = { authViewModel.onGetStarted() }) }
-        composable(Screen.Auth.route) { AuthScreen(viewModel = authViewModel) }
+        composable(Screen.Splash.route) {
+            SplashScreen(viewModel = authViewModel)
+        }
+        composable(Screen.GetStarted.route) {
+            GetStartedScreen(onGetStarted = { authViewModel.onGetStarted() })
+        }
+        composable(Screen.Auth.route) {
+            AuthScreen(viewModel = authViewModel)
+        }
 
         composable(Screen.EnterDetails.route) {
             EnterDetailsScreen(
@@ -95,6 +105,7 @@ fun NavGraph(
                 onNavigateToAnalytics = { projectId -> navController.navigate(Screen.Analytics.createRoute(projectId)) }
             )
         }
+
         composable(Screen.Profile.route) {
             ProfileScreen(viewModel = profileViewModel, onNavigateBack = { navController.popBackStack() })
         }
@@ -110,12 +121,15 @@ fun NavGraph(
                 onNavigateBack = { navController.popBackStack() }
             )
         }
+
         composable(
             route = Screen.TaskScreen.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })
         ) { backStackEntry ->
             val projectId = backStackEntry.arguments?.getLong("projectId") ?: 0L
             val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+
+
             DisposableEffect(lifecycleOwner) {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_RESUME) {
@@ -125,6 +139,7 @@ fun NavGraph(
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
             }
+
             TaskScreen(
                 projectId = projectId,
                 viewModel = projectViewModel,
@@ -134,9 +149,11 @@ fun NavGraph(
                 onNavigateToCreatePoll = { pId -> navController.navigate(Screen.CreatePoll.createRoute(pId)) },
                         onNavigateToChat = { pId ->
                     navController.navigate(Screen.ChatScreen.createRoute(pId))
-                }
+                },
+                onNavigateToAnalytics = { pId -> navController.navigate(Screen.Analytics.createRoute(pId)) }
             )
         }
+
         composable(
             route = Screen.CreateTask.route,
             arguments = listOf(navArgument("projectId") { type = NavType.LongType })

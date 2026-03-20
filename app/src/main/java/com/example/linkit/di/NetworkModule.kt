@@ -3,28 +3,32 @@ package com.example.linkit.di
 import android.content.Context
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
+import coil.ImageLoader
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
 import com.example.linkit.data.TokenStore
 import com.example.linkit.data.api.AnalyticsApiService
 import com.example.linkit.data.api.ApiService
 import com.example.linkit.data.api.ChatApi
 import com.example.linkit.data.api.ProjectApiService
 import com.example.linkit.data.local.LinkItDatabase
+import com.example.linkit.data.local.dao.AttachmentDao
 import com.example.linkit.data.local.dao.ChatMessageDao
 import com.example.linkit.data.local.dao.ConnectionDao
+import com.example.linkit.data.local.dao.ProjectDao
+import com.example.linkit.data.local.dao.TaskDao
 import com.example.linkit.data.local.dao.UserDao
 import com.example.linkit.data.repo.AnalyticsRepository
 import com.example.linkit.data.repo.AuthRepository
 import com.example.linkit.data.repo.ChatRepository
 import com.example.linkit.data.repo.ChatRepositoryImpl
 import com.example.linkit.data.repo.ChatWebSocketClient
-import com.example.linkit.data.repo.ImageRepository
 import com.example.linkit.data.repo.PollRepository
 import com.example.linkit.data.repo.ProfileRepository
 import com.example.linkit.data.repo.ProjectRepository
 import com.example.linkit.network.AuthInterceptor
 import com.example.linkit.network.ResponseInterceptor
 import com.example.linkit.util.Constants
-import com.example.linkit.util.ImageCacheManager
 import com.example.linkit.util.NetworkUtils
 import dagger.Module
 import dagger.Provides
@@ -56,7 +60,7 @@ object NetworkModule {
             LinkItDatabase::class.java,
             "linkit_database"
         )
-            .fallbackToDestructiveMigration(false)
+            .fallbackToDestructiveMigration(true) //Change to true if we want Room to clear the DB when the version changes instead of crashing due to the missing migration to version 4.
             .build()
     }
 
@@ -67,15 +71,15 @@ object NetworkModule {
     fun provideConnectionDao(database: LinkItDatabase): ConnectionDao = database.connectionDao()
 
     @Provides
-    @Singleton
-    fun provideNetworkUtils(@ApplicationContext context: Context): NetworkUtils {
-        return NetworkUtils(context)
-    }
+    fun provideProjectDao(database: LinkItDatabase): ProjectDao = database.projectDao()
+
+    @Provides
+    fun provideTaskDao(database: LinkItDatabase): TaskDao = database.taskDao()
 
     @Provides
     @Singleton
-    fun provideImageCacheManager(@ApplicationContext context: Context): ImageCacheManager {
-        return ImageCacheManager(context)
+    fun provideNetworkUtils(@ApplicationContext context: Context): NetworkUtils {
+        return NetworkUtils(context)
     }
 
     @Provides
@@ -147,19 +151,9 @@ object NetworkModule {
         tokenStore: TokenStore,
         userDao: UserDao,
         connectionDao: ConnectionDao,
-        networkUtils: NetworkUtils,
-        imageCacheManager: ImageCacheManager
+        networkUtils: NetworkUtils
     ): ProfileRepository {
-        return ProfileRepository(apiService, tokenStore, userDao, connectionDao, networkUtils, imageCacheManager)
-    }
-
-    @Provides
-    @Singleton
-    fun provideImageRepository(
-        apiService: ApiService,
-        tokenStore: TokenStore
-    ): ImageRepository {
-        return ImageRepository(apiService, tokenStore)
+        return ProfileRepository(apiService, tokenStore, userDao, connectionDao, networkUtils)
     }
 
     @Provides
@@ -167,17 +161,23 @@ object NetworkModule {
     fun provideProjectApiService(retrofit: Retrofit): ProjectApiService {
         return retrofit.create(ProjectApiService::class.java)
     }
+    @Provides
+    fun provideAttachmentDao(database: LinkItDatabase): AttachmentDao = database.attachmentDao()
 
     @Provides
     @Singleton
     fun provideProjectRepository(
         projectApiService: ProjectApiService,
+        projectDao: ProjectDao,
+        taskDao: TaskDao,
+        attachmentDao: AttachmentDao,
         tokenStore: TokenStore,
         networkUtils: NetworkUtils,
         @ApplicationContext context: Context
     ): ProjectRepository {
-        return ProjectRepository(projectApiService, tokenStore, networkUtils,context)
+        return ProjectRepository(projectApiService, projectDao, taskDao, attachmentDao, tokenStore, networkUtils,context)
     }
+
 
     @Provides
     @Singleton
@@ -234,8 +234,27 @@ object NetworkModule {
         return ChatRepositoryImpl(chatApi, webSocketClient, chatMessageDao)
     }
 
-
-
+    @Provides
+    @Singleton
+    fun provideImageLoader(
+        @ApplicationContext context: Context
+    ): ImageLoader {
+        return ImageLoader.Builder(context)
+            .memoryCache {
+                MemoryCache.Builder(context)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(context.cacheDir.resolve("image_cache"))
+                    .maxSizePercent(0.02)
+                    .build()
+            }
+            .respectCacheHeaders(false)
+            .crossfade(true)
+            .build()
+    }
 }
 
 
