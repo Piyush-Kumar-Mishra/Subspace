@@ -108,11 +108,11 @@ It allows teams to manage their work from a mobile app. The app supports offline
 <img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" />
  -->
 <p>
-  <img src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" width="275"/>
+  <img src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" width="270"/>
   &nbsp;
-  <img src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" width="275"/>
+  <img src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" width="270"/>
   &nbsp;
-  <img src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" width="275"/>
+  <img src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" width="270"/>
 </p>
 
 
