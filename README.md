@@ -90,6 +90,12 @@ It allows teams to manage their work from a mobile app. The app supports offline
 - 💬 Integrated Project Chat – Communicate with team members through real-time chat with message history support and pagination.
 - 📊 Project Analytics & Insights – Visualize project progress, task completion rates, and workload distribution.
 
+
+<p>
+  <img src="https://github.com/user-attachments/assets/af3495b5-0c80-4223-884e-eff28f2e6206" width="400"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/425e478f-02a9-4e8b-b69e-77f2ee5c5c33" width="400"/>
+</p>
 <img width="300" height="2600" alt="image" src="https://github.com/user-attachments/assets/af3495b5-0c80-4223-884e-eff28f2e6206" />
  <img width="300" height="2600" alt="image" src="https://github.com/user-attachments/assets/425e478f-02a9-4e8b-b69e-77f2ee5c5c33" />
 <!-- <img width="300" height="3000" alt="image" src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" /> -->
