@@ -108,11 +108,11 @@ It allows teams to manage their work from a mobile app. The app supports offline
 <img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" />
  -->
 <p>
-  <img src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" width="280"/>
+  <img src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" width="275"/>
   &nbsp;
-  <img src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" width="280"/>
+  <img src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" width="275"/>
   &nbsp;
-  <img src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" width="280"/>
+  <img src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" width="275"/>
 </p>
 
 
@@ -123,19 +123,34 @@ It allows teams to manage their work from a mobile app. The app supports offline
 - 📈 Real-time poll result tracking and participation insights.
 - 📊 Advanced project analytics for tracking productivity and progress.
 
-<img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/03f9ed29-ed30-44a7-8c6b-597e9266d9a6" />
-<img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/f693c446-01e4-47d3-8d00-041eb1dd2909" />
-<img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/a5b0e64f-6e57-4bdb-9364-527175089764" />
+<!-- <img width="270" height="200" alt="image" src="https://github.com/user-attachments/assets/03f9ed29-ed30-44a7-8c6b-597e9266d9a6" />
+<img width="270" height="200" alt="image" src="https://github.com/user-attachments/assets/f693c446-01e4-47d3-8d00-041eb1dd2909" />
+<img width="270" height="200" alt="image" src="https://github.com/user-attachments/assets/a5b0e64f-6e57-4bdb-9364-527175089764" /> -->
+<p>
+  <img src="https://github.com/user-attachments/assets/03f9ed29-ed30-44a7-8c6b-597e9266d9a6" width="270"/>
+  &nbsp;
+  <img src="https://github.com/user-attachments/assets/f693c446-01e4-47d3-8d00-041eb1dd2909" width="270"/>
+  &nbsp;
+  <img src="https://github.com/user-attachments/assets/a5b0e64f-6e57-4bdb-9364-527175089764" width="270"/>
+</p>
+
 
 ## ⬤ Connect With Your Team!
 - 🔍 User Search – Search and discover other users by name or profile details for seamless networking.
 - 🤝 Connection Requests – Send, receive, and manage connection requests with accept/reject functionality.
 - 🌐 User Connections Management – Build and maintain connections with real-time updates and secure user relationship handling.
 
-<img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" />
-<img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" />
-<img width="270" height="2000" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
-
+<!-- <img width="270" height="260" alt="image" src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" />
+<img width="270" height="260" alt="image" src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" />
+<img width="270" height="260" alt="image" src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" />
+ -->
+<p>
+  <img src="https://github.com/user-attachments/assets/a37b9a8b-e75d-40d1-b9f6-866a120e5051" width="270"/>
+  &nbsp;
+  <img src="https://github.com/user-attachments/assets/cf2f6e44-63ed-490b-8ec0-f388b3f3cd44" width="270"/>
+  &nbsp;
+  <img src="https://github.com/user-attachments/assets/cbab6da6-0fd8-493e-822a-ce32fe06ed3f" width="270"/>
+</p>
 
 ## ⬤ Libraries Used
 
