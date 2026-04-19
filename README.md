@@ -92,13 +92,10 @@ It allows teams to manage their work from a mobile app. The app supports offline
 
 
 <p>
-  <img src="https://github.com/user-attachments/assets/af3495b5-0c80-4223-884e-eff28f2e6206" width="350"/>
+  <img src="https://github.com/user-attachments/assets/af3495b5-0c80-4223-884e-eff28f2e6206" width="300"/>
   &nbsp;&nbsp;&nbsp;
-  <img src="https://github.com/user-attachments/assets/425e478f-02a9-4e8b-b69e-77f2ee5c5c33" width="350"/>
+  <img src="https://github.com/user-attachments/assets/425e478f-02a9-4e8b-b69e-77f2ee5c5c33" width="300"/>
 </p>
-<img width="300" height="2600" alt="image" src="https://github.com/user-attachments/assets/af3495b5-0c80-4223-884e-eff28f2e6206" />
- <img width="300" height="2600" alt="image" src="https://github.com/user-attachments/assets/425e478f-02a9-4e8b-b69e-77f2ee5c5c33" />
-<!-- <img width="300" height="3000" alt="image" src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" /> -->
 
 ## ⬤ Implemented Principles & System Design
 - 🧱 MVVM Architecture – Clear separation between UI (View), business logic (ViewModel), and -   data layer for maintainable and testable code.
@@ -106,10 +103,18 @@ It allows teams to manage their work from a mobile app. The app supports offline
 - ☁️ Cloud-Native Infrastructure – AWS S3 for secure object storage and AWS RDS for managed relational database services.
 - 🔐 Signed URL-based access control for secure file uploads and downloads.
 - 🔄 Offline-First Strategy – Local caching with Room DB and background synchronization.
-<img width="270" height="3000" alt="image" src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" />
+<!-- <img width="270" height="3000" alt="image" src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" />
 <img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" />
 <img width="270" height="2600" alt="image" src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" />
+ -->
 
+ <p>
+  <img src="https://github.com/user-attachments/assets/e4e4ec0f-e2ef-4b33-8d3c-7d63deffba0e" width="300"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/93fe23dc-2050-4627-80dd-9815544b51e2" width="300"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="https://github.com/user-attachments/assets/938eae7d-3ae1-4db4-aaf6-7418b4f7ba1c" width="300"/>
+</p>
 
 
 
